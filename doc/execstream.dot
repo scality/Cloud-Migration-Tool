@@ -1,0 +1,38 @@
+digraph C{
+subgraph clusterCloudMig {
+    bgcolor = white
+    label = cloudmig
+    main -> arg_parser
+    main -> load_profiles
+    main -> load_status
+        load_status -> get_status_file
+            get_status_file -> create_status_file
+                create_status_file -> list_vdir
+                    list_vdir -> dpl_opendir
+                    list_vdir -> dpl_readdir
+                    list_vdir -> dpl_eof
+                    list_vdir -> dpl_closedir
+                    list_vdir -> status_add_file 
+    main -> transfer_bucket
+        transfer_bucket -> set_state_from_status
+        transfer_bucket -> transfer_file
+            transfer_file -> get_part_from_bucket
+                get_part_from_bucket -> dpl_get_range
+            transfer_file -> put_part_to_bucket
+                put_part_to_bucket -> dpl_put_range
+            transfer_file -> update_status
+                update_status -> dpl_put_range
+        transfer_bucket -> get_next_file_from_status
+    subgraph clusterdpl {
+        bgcolor = white
+        label = droplet_library
+        dpl_opendir
+        dpl_readdir
+        dpl_eof
+        dpl_closedir
+        dpl_get_range
+        dpl_put_range
+    }
+
+}
+}
