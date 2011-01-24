@@ -36,9 +36,9 @@ INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/inc
 )
 
 
-SET(CLOUDMIG_SRC    src/main.c)
+SET(CLOUDMIG_SRC    src/main.c
+                    src/
+)
 
 ADD_EXECUTABLE(cloudmig ${CLOUDMIG_SRC})
 TARGET_LINK_LIBRARIES(cloudmig ${DROPLET_LIBRARY})
-
-
