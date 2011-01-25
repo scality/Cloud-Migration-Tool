@@ -39,6 +39,7 @@ INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/inc
 
 SET(CLOUDMIG_SRC    src/main.c
                     src/options.c
+                    src/log.c
 )
 
 ADD_EXECUTABLE(cloudmig ${CLOUDMIG_SRC})
