@@ -1,12 +1,42 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "options.h"
 #include "cloudmig.h"
 
-extern char* optarg;
 
+extern enum cloudmig_loglevel gl_loglevel;
+
+int cloudmig_options_check(void)
+{
+    if (!gl_options->src_profile)
+    {
+        PRINTERR("No source defined for the migration.\n", 0);
+        return (EXIT_FAILURE);
+    }
+    if (!gl_options->dest_profile)
+    {
+        PRINTERR("No destination defined for the migration.\n", 0);
+        return (EXIT_FAILURE);
+    }
+    if (gl_options->flags & DEBUG
+        && gl_options->flags & QUIET)
+    {
+        PRINTERR("Bad options : q and v are mutually exclusive.", 0);
+        return (EXIT_FAILURE);
+    }
+    if (gl_options->flags & DEBUG)
+        gl_loglevel = DEBUG_LVL;
+    else if (gl_options->flags & QUIET)
+        gl_loglevel = WARN_LVL;
+    return (EXIT_SUCCESS);
+}
+
+
+// global var used with getopt
+extern char* optarg;
 /*
  *
  * Here we could have used the getopt_long format, but because it is
@@ -73,15 +103,7 @@ int retrieve_opts(int argc, char* argv[])
             return (EXIT_FAILURE);
         }
     }
-    if (!gl_options->src_profile)
-    {
-        PRINTERR("No source defined for the migration.\n", 0);
+    if (cloudmig_options_check())
         return (EXIT_FAILURE);
-    }
-    if (!gl_options->dest_profile)
-    {
-        PRINTERR("No destination defined for the migration.\n", 0);
-        return (EXIT_FAILURE);
-    }
     return (EXIT_SUCCESS);
 }
