@@ -1,6 +1,12 @@
 #ifndef __CLOUDMIG_H__
 #define __CLOUDMIG_H__
 
+/*
+ * necessary in all cases for our data structures.
+ */
+#include <dropletp.h>
+
+
 #define CLOUDMIG_VERSION_MAJOR @CLOUDMIG_VERSION_MAJOR@
 #define CLOUDMIG_VERSION_MINOR @CLOUDMIG_VERSION_MINOR@
 
@@ -41,6 +47,28 @@ enum cloudmig_loglevel
 };
 
 
+
+
+/*
+ * Structure containing the data about the whole transfer status
+ */
+struct cloudmig_status
+{
+    dpl_ctx_t*  ctx;
+    // TODO : to be improved...
+};
+
+/*
+ * Structure containing the migration context
+ */
+struct cloudmig_ctx
+{
+    dpl_ctx_t*              src;
+    dpl_ctx_t*              dest;
+    struct cloudmig_status  status;
+};
+
+
 /*
  * Util functions
  */
@@ -52,5 +80,6 @@ void cloudmig_log(enum cloudmig_loglevel lvl, const char* format, ...);
  * Required prototypes
  */
 int retrieve_opts(int argc, char* argv[]);
+int load_profiles(struct cloudmig_ctx* ctx);
 
 #endif /* ! __CLOUDMIG_H__ */

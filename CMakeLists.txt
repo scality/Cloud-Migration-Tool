@@ -12,6 +12,7 @@ FIND_PACKAGE(Dot)
 
 # Find the (own) Droplet package in order to build the project.
 FIND_PACKAGE(Droplet REQUIRED)
+FIND_PACKAGE(LibXml2 REQUIRED)
 
 SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
 
@@ -34,12 +35,14 @@ CONFIGURE_FILE(${PROJECT_SOURCE_DIR}/inc/cloudmig.h.in
 INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/inc
                     ${PROJECT_BINARY_DIR}/inc
                     ${DROPLET_INCLUDE_DIR}
+                    ${LIBXML2_INCLUDE_DIR}
 )
 
 
 SET(CLOUDMIG_SRC    src/main.c
                     src/options.c
                     src/log.c
+                    src/load_profiles.c
 )
 
 ADD_EXECUTABLE(cloudmig ${CLOUDMIG_SRC})
