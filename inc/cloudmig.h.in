@@ -25,4 +25,32 @@
                                 fprintf(stderr, format, __VA_ARGS__);\
                             } while (0)
 
+
+/*
+ * Defines the log level used for a message, and whether it should be
+ * displayed or not.
+ *
+ * In any file manipulating the log level, this line must be added :
+ * extern enum cloudmig_loglevel gl_loglevel;
+ */
+enum cloudmig_loglevel
+{
+    DEBUG_LVL,
+    INFO_LVL,
+    WARN_LVL
+};
+
+
+/*
+ * Util functions
+ */
+void cloudmig_log(enum cloudmig_loglevel lvl, const char* format, ...);
+
+
+
+/*
+ * Required prototypes
+ */
+int retrieve_opts(int argc, char* argv[]);
+
 #endif /* ! __CLOUDMIG_H__ */

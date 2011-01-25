@@ -27,6 +27,7 @@ ENDIF (DOT_EXECUTABLE_FOUND)
 #
 # Compile the code
 #
+ADD_DEFINITIONS(-W -Wall -Werror)
 CONFIGURE_FILE(${PROJECT_SOURCE_DIR}/inc/cloudmig.h.in
                ${PROJECT_BINARY_DIR}/inc/cloudmig.h
 )
@@ -37,7 +38,7 @@ INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/inc
 
 
 SET(CLOUDMIG_SRC    src/main.c
-                    src/
+                    src/options.c
 )
 
 ADD_EXECUTABLE(cloudmig ${CLOUDMIG_SRC})
