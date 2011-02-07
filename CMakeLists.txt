@@ -28,7 +28,9 @@ ENDIF (DOT_EXECUTABLE_FOUND)
 #
 # Compile the code
 #
-ADD_DEFINITIONS(-W -Wall -Werror)
+ADD_DEFINITIONS(-W -Wall -Werror -std=c99)
+ADD_DEFINITIONS(-D_GNU_SOURCE)              # activate code in C99 (strdup...)
+
 CONFIGURE_FILE(${PROJECT_SOURCE_DIR}/inc/cloudmig.h.in
                ${PROJECT_BINARY_DIR}/inc/cloudmig.h
 )

@@ -1,4 +1,5 @@
-#include <dropletp.h>
+#include <string.h>
+
 #include <libgen.h>
 
 #include "options.h"
@@ -47,6 +48,24 @@ int load_profiles(struct cloudmig_ctx* ctx)
         return (EXIT_FAILURE);
     }
     free(cpy);
+
+
+    /*
+     * If the debug option was given, let's activate every droplet traces.
+     */
+    if (gl_options->flags & DEBUG)
+    {
+        ctx->src_ctx->trace_level =   DPL_TRACE_CONN | DPL_TRACE_IO
+                                    | DPL_TRACE_HTTP | DPL_TRACE_SSL
+                                    | DPL_TRACE_REQ  | DPL_TRACE_CONV
+                                    | DPL_TRACE_VDIR | DPL_TRACE_VFILE
+                                    | DPL_TRACE_BUF  ;
+        ctx->dest_ctx->trace_level =  DPL_TRACE_CONN | DPL_TRACE_IO
+                                    | DPL_TRACE_HTTP | DPL_TRACE_SSL
+                                    | DPL_TRACE_REQ  | DPL_TRACE_CONV
+                                    | DPL_TRACE_VDIR | DPL_TRACE_VFILE
+                                    | DPL_TRACE_BUF  ;
+    }
 
     return (EXIT_SUCCESS);
 }

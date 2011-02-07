@@ -2,8 +2,10 @@
 #define __CLOUDMIG_H__
 
 /*
- * necessary in all cases for our data structures.
+ * necessary in all cases for our data structures :
+ * libdroplet and its dependencies (pthread)
  */
+#include <pthread.h>
 #include <dropletp.h>
 
 

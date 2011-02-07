@@ -9,7 +9,7 @@ enum cloudmig_loglevel gl_loglevel = INFO_LVL;
 
 void cloudmig_log(enum cloudmig_loglevel lvl, const char* format, ...)
 {
-    if (lvl < gl_loglevel)
+    if (lvl >= gl_loglevel)
     {
         va_list args;
         char*   fmt = 0;
