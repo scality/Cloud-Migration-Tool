@@ -1,0 +1,38 @@
+This document describes the transfer status file in a detailed manner.
+
+A transfer status file (or ".cloudmig file") describes the transfer status of
+one and only one bucket. The name of the file matches the bucket's name.
+
+This file format is quite simple since it's only goal is to help maintaining an
+updated status of the account's migration.
+
+Thus, the file is a concatenation of files status, which are binary data
+directly written into the file. For compatibility purposes, the data must be
+written in big endian byte-order (thus following the network byte-order).
+
+Here is a table describing the binary format of one entry (each integer being
+                                                           written in big
+                                                           endian byte-order):
+
+-------------------------------------------------------------------------------
+| integer (4 bytes) : length of the file's name. (rounded to a superior       |
+|                                                 multiple of 4)              |
+|-----------------------------------------------------------------------------|
+| integer (4 bytes) : whole file size.                                        |
+|-----------------------------------------------------------------------------|
+| integer (4 bytes) : Current writing offset (used in case of interruption in |
+|                                             order to resume the migration)  |
+|-----------------------------------------------------------------------------|
+| Data : filename data padded in order to reach the length of the first       |
+|        integer rounded to the superior 4 multiple.                          |
+|                                                                             |
+|                                                                             |
+|                                                                             |
+-------------------------------------------------------------------------------
+
+
+Those files will be contained in a bucket created for this sole purpose on the
+source's storage space. Since a migration should be seen as an atomic action,
+the user should never try to migrate a source accoutn to two different
+destination accounts, thus avoiding status bucket conflicts (the name of the
+status bucket is computed from the source and destination host).
