@@ -56,7 +56,7 @@ enum cloudmig_loglevel
  */
 struct cloudmig_status
 {
-    dpl_ctx_t*  ctx;
+    char*       bucket;
     // TODO : to be improved...
 };
 
@@ -83,5 +83,6 @@ void cloudmig_log(enum cloudmig_loglevel lvl, const char* format, ...);
  */
 int retrieve_opts(int argc, char* argv[]);
 int load_profiles(struct cloudmig_ctx* ctx);
+int load_status(struct cloudmig_ctx* ctx);
 
 #endif /* ! __CLOUDMIG_H__ */

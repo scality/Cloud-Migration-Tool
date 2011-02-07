@@ -45,6 +45,7 @@ SET(CLOUDMIG_SRC    src/main.c
                     src/options.c
                     src/log.c
                     src/load_profiles.c
+                    src/status.c
 )
 
 ADD_EXECUTABLE(cloudmig ${CLOUDMIG_SRC})
