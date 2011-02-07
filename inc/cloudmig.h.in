@@ -65,8 +65,8 @@ struct cloudmig_status
  */
 struct cloudmig_ctx
 {
-    dpl_ctx_t*              src;
-    dpl_ctx_t*              dest;
+    dpl_ctx_t*              src_ctx;
+    dpl_ctx_t*              dest_ctx;
     struct cloudmig_status  status;
 };
 
