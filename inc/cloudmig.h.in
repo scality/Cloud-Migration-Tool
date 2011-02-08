@@ -27,6 +27,11 @@
 #ifndef __CLOUDMIG_H__
 #define __CLOUDMIG_H__
 
+#define CLOUDMIG_VERSION_MAJOR @CLOUDMIG_VERSION_MAJOR@
+#define CLOUDMIG_VERSION_MINOR @CLOUDMIG_VERSION_MINOR@
+
+#include <sys/types.h>
+
 /*
  * necessary in all cases for our data structures :
  * libdroplet and its dependencies (pthread)
@@ -34,57 +39,12 @@
 #include <pthread.h>
 #include <dropletp.h>
 
-
-#define CLOUDMIG_VERSION_MAJOR @CLOUDMIG_VERSION_MAJOR@
-#define CLOUDMIG_VERSION_MINOR @CLOUDMIG_VERSION_MINOR@
-
-
 /*
- * This macro allows defining your own format while prepending the program's
- * name.
- *
- * It considers that the whole format string should not be over 512 chars.
- * A buffer overflow is prevented by the use of the strncat function.
- *
- * We chose not to include the proper includes, and to let the source file (.c)
- * do it properly. The required includes are :
- * #include <stdio.h>
- * #include <string.h>
+ * Needed includes for this master include
  */
-#define PRINTERR(msg, ...)  do\
-                            {\
-                                char format[512] = {0};\
-                                strcpy(format, "cloudmig: ");\
-                                strncat(format, msg, 509);\
-                                fprintf(stderr, format, __VA_ARGS__);\
-                            } while (0)
-
-
-/*
- * Defines the log level used for a message, and whether it should be
- * displayed or not.
- *
- * In any file manipulating the log level, this line must be added :
- * extern enum cloudmig_loglevel gl_loglevel;
- */
-enum cloudmig_loglevel
-{
-    DEBUG_LVL,
-    INFO_LVL,
-    WARN_LVL
-};
-
-
-
-
-/*
- * Structure containing the data about the whole transfer status
- */
-struct cloudmig_status
-{
-    char*       bucket;
-    // TODO : to be improved...
-};
+#include "error.h"
+#include "log.h"
+#include "status.h"
 
 /*
  * Structure containing the migration context
@@ -95,13 +55,6 @@ struct cloudmig_ctx
     dpl_ctx_t*              dest_ctx;
     struct cloudmig_status  status;
 };
-
-
-/*
- * Util functions
- */
-void cloudmig_log(enum cloudmig_loglevel lvl, const char* format, ...);
-
 
 
 /*

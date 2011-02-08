@@ -24,27 +24,27 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-#include <stdlib.h>
+#ifndef __CLOUDMIG_ERROR_H__
+#define __CLOUDMIG_ERROR_H__
 
-#include "cloudmig.h"
-#include "options.h"
+/*
+ * This macro allows defining your own format while prepending the program's
+ * name.
+ *
+ * It considers that the whole format string should not be over 512 chars.
+ * A buffer overflow is prevented by the use of the strncat function.
+ *
+ * We chose not to include the proper includes, and to let the source file (.c)
+ * do it properly. The required includes are :
+ * #include <stdio.h>
+ * #include <string.h>
+ */
+#define PRINTERR(msg, ...)  do\
+                            {\
+                                char format[512] = {0};\
+                                strcpy(format, "cloudmig: ");\
+                                strncat(format, msg, 509);\
+                                fprintf(stderr, format, __VA_ARGS__);\
+                            } while (0)
 
-struct cloudmig_options *	gl_options = NULL;
-
-int main(int argc, char* argv[])
-{
-	struct cloudmig_options options = {0, 0, 0, 0, 0};
-	gl_options = &options;
-
-    if (retrieve_opts(argc, argv))
-        return (EXIT_FAILURE);
-	
-    struct cloudmig_ctx     ctx = {0, 0, {0, 0}};
-    if (load_profiles(&ctx))
-        return (EXIT_FAILURE);
-
-    if (load_status(&ctx))
-        return (EXIT_FAILURE);
-
-	return (EXIT_SUCCESS);
-}
+#endif /* ! __CLOUDMIG_ERROR_H__ */

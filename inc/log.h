@@ -24,27 +24,23 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-#include <stdlib.h>
+#ifndef __CLOUDMIG_LOG_H__
+#define __CLOUDMIG_LOG_H__
 
-#include "cloudmig.h"
-#include "options.h"
-
-struct cloudmig_options *	gl_options = NULL;
-
-int main(int argc, char* argv[])
+/*
+ * Defines the log level used for a message, and whether it should be
+ * displayed or not.
+ *
+ * In any file manipulating the log level, this line must be added :
+ * extern enum cloudmig_loglevel gl_loglevel;
+ */
+enum cloudmig_loglevel
 {
-	struct cloudmig_options options = {0, 0, 0, 0, 0};
-	gl_options = &options;
+    DEBUG_LVL,
+    INFO_LVL,
+    WARN_LVL
+};
 
-    if (retrieve_opts(argc, argv))
-        return (EXIT_FAILURE);
-	
-    struct cloudmig_ctx     ctx = {0, 0, {0, 0}};
-    if (load_profiles(&ctx))
-        return (EXIT_FAILURE);
+void cloudmig_log(enum cloudmig_loglevel lvl, const char* format, ...);
 
-    if (load_status(&ctx))
-        return (EXIT_FAILURE);
-
-	return (EXIT_SUCCESS);
-}
+#endif /* ! __CLOUDMIG_LOG_H__ */
