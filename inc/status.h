@@ -37,7 +37,7 @@ struct transfer_state
  */
 struct cloudmig_status
 {
-    char*                   bucket;
+    char*                   bucket_name;
     struct transfer_state   *bucket_states;
 };
 

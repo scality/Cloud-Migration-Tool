@@ -80,17 +80,17 @@ static char*     compute_status_bucket(struct cloudmig_ctx* ctx)
 static int create_status_bucket(struct cloudmig_ctx* ctx)
 {
     assert(ctx != NULL);
-    assert(ctx->status.bucket != NULL);
+    assert(ctx->status.bucket_name != NULL);
 
     dpl_status_t    ret;
 
-    ret = dpl_make_bucket(ctx->src_ctx, ctx->status.bucket,
+    ret = dpl_make_bucket(ctx->src_ctx, ctx->status.bucket_name,
                           DPL_LOCATION_CONSTRAINT_US_STANDARD,
                           DPL_CANNED_ACL_PRIVATE);
     if (ret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not create status bucket '%s' (%i bytes): %s\n",
-                 __FUNCTION__, ctx->status.bucket, strlen(ctx->status.bucket),
+                 __FUNCTION__, ctx->status.bucket_name, strlen(ctx->status.bucket_name),
                  dpl_status_str(ret));
         return EXIT_FAILURE;
     }
@@ -144,9 +144,9 @@ int load_status(struct cloudmig_ctx* ctx)
     int             resuming = 0; // Used to differentiate resuming migration from starting it
 
     // First, make sure we have a status bucket defined.
-    if (ctx->status.bucket == NULL)
-        ctx->status.bucket = compute_status_bucket(ctx);
-    if (ctx->status.bucket == NULL)
+    if (ctx->status.bucket_name == NULL)
+        ctx->status.bucket_name = compute_status_bucket(ctx);
+    if (ctx->status.bucket_name == NULL)
         return (EXIT_FAILURE);
 
     /*
@@ -169,10 +169,10 @@ int load_status(struct cloudmig_ctx* ctx)
     for (int i = 0; i < src_buckets->n_items; ++i)
     {
         if (strcmp(((dpl_bucket_t**)(src_buckets->array))[i]->name,
-                   ctx->status.bucket) == 0)
+                   ctx->status.bucket_name) == 0)
         {
             cloudmig_log(DEBUG_LVL, "Found status bucket (%s) on source storage\n",
-                         ctx->status.bucket);
+                         ctx->status.bucket_name);
             resuming = 1;
             break ;
         }
@@ -197,7 +197,7 @@ int load_status(struct cloudmig_ctx* ctx)
             {
                 cloudmig_log(WARN_LVL,
                              "An Error happened while creating the status bucket and file.\nPlease delete manually the bucket '%s' before restarting the tool...\n",
-                             ctx->status.bucket);
+                             ctx->status.bucket_name);
                 goto free_buckets_vec;
             }
         }
@@ -212,8 +212,8 @@ free_buckets_vec:
     dpl_vec_buckets_free(src_buckets);
 
 free_status_name:
-    free(ctx->status.bucket);
-    ctx->status.bucket = NULL;
+    free(ctx->status.bucket_name);
+    ctx->status.bucket_name = NULL;
 
     return ret;
 }
