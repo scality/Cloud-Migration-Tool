@@ -552,6 +552,8 @@ int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
     }
 
     ret = EXIT_SUCCESS;
+    if (ctx->status.cur_state == ctx->status.nb_states)
+        ret = ENODATA;
 
 err:
     filestate->fixed.size = 0;
