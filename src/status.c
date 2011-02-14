@@ -549,6 +549,7 @@ int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
             break ;
         free(ctx->status.bucket_states[i].buf);
         ctx->status.bucket_states[i].buf = NULL;
+        ctx->status.cur_state = i; // update the current state file index.
     }
 
     ret = EXIT_SUCCESS;
