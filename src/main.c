@@ -39,12 +39,15 @@ int main(int argc, char* argv[])
     if (retrieve_opts(argc, argv))
         return (EXIT_FAILURE);
 	
-    struct cloudmig_ctx     ctx = {0, 0, {0, 0}};
+    struct cloudmig_ctx     ctx = {0, 0, {0, 0, 0, 0}};
     if (load_profiles(&ctx))
         return (EXIT_FAILURE);
 
     if (load_status(&ctx))
         return (EXIT_FAILURE);
 
+    struct file_transfer_state filestate;
+    if (status_next_incomplete_entry(&ctx, &filestate))
+        return (EXIT_FAILURE);
 	return (EXIT_SUCCESS);
 }

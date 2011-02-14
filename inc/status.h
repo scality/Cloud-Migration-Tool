@@ -16,16 +16,16 @@ struct file_state_entry
 {
     int32_t      namlen;     // calculated with ROUND_NAMLEN
     int32_t      size;       // size of the file
-    int32_t      offset;     // offset/quantity already copied
+    int32_t      offset;     // offset/quantity already copied - Unused
 };
 
 /*
- * Structure used as a mask for reading an entry in the bucket status file
+ * Structure used for an entry in the bucket status file
  */
 struct file_transfer_state
 {
-    struct file_state_entry *fixed; // fixed data struct (use as reading mask)
-    char*                   name;   // filename of the manipulated file
+    struct file_state_entry fixed;
+    char*                   name;
 };
 
 
@@ -34,10 +34,10 @@ struct file_transfer_state
  */
 struct transfer_state
 {
-    char*                       filename;
-    char*                       buffer;     // buffer of the file
-    size_t                      size;       // size of the state file
-    void*                       next_entry; // to tell whether
+    char                        *filename;
+    size_t                      size; // size of the state file
+    char                        *buf; // Needed in order to update the file.
+    unsigned int                next_entry_off;
 };
 
 /*
@@ -46,7 +46,9 @@ struct transfer_state
 struct cloudmig_status
 {
     char*                   bucket_name;
-    struct transfer_state   *bucket_states;
+    int                     nb_states;
+    int                     cur_state;
+    struct transfer_state*  bucket_states;
 };
 
 

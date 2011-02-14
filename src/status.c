@@ -41,6 +41,11 @@
  * static size_t        calc_status_file_size(dpl_object_t** objs, int n_items);
  * static int           create_status_file(struct cloudmig_ctx* ctx,
  *                                         dpl_bucket_t* bucket);
+ *
+ * static int           status_retrieve_states(struct cloudmig_ctx* ctx);
+ * static dpl_status_t  status_append_buffer_to_bucket_state(void* ctx,
+ *                                                           char* buf,
+ *                                                           unsigned int len);
  */
 
 /*
@@ -246,10 +251,11 @@ end:
 
 int load_status(struct cloudmig_ctx* ctx)
 {
-    assert(ctx);
+     assert(ctx);
     int             ret = EXIT_SUCCESS;
     dpl_status_t    dplret;
-    int             resuming = 0; // Used to differentiate resuming migration from starting it
+    int             resuming = 0; // differentiate resuming and starting mig'
+    dpl_vec_t       *src_buckets = NULL;
 
     // First, make sure we have a status bucket defined.
     if (ctx->status.bucket_name == NULL)
@@ -264,22 +270,20 @@ int load_status(struct cloudmig_ctx* ctx)
      * By the way, we do not care about the destination's bucket list,
      * since the user should know that the tool makes a forceful copy.
      */
-    dpl_vec_t*  src_buckets = 0;
     if ((dplret = dpl_list_all_my_buckets(ctx->src_ctx,
                                        &src_buckets)) != DPL_SUCCESS)
     {
-        
         PRINTERR("%s: Could not list source's buckets : %s\n",
                  __FUNCTION__, dpl_status_str(dplret));
-        ret = EXIT_FAILURE;
-        goto free_status_name;
+        goto err;
     }
     for (int i = 0; i < src_buckets->n_items; ++i)
     {
         if (strcmp(((dpl_bucket_t**)(src_buckets->array))[i]->name,
                    ctx->status.bucket_name) == 0)
         {
-            cloudmig_log(DEBUG_LVL, "Found status bucket (%s) on source storage\n",
+            cloudmig_log(DEBUG_LVL,
+"[Creating status] Found status bucket (%s) on source storage\n",
                          ctx->status.bucket_name);
             resuming = 1;
             break ;
@@ -290,8 +294,8 @@ int load_status(struct cloudmig_ctx* ctx)
         // First, create the status bucket since it didn't exist.
         if ((ret = create_status_bucket(ctx)))
         {
-            PRINTERR("%s: Could not create status bucket\n", __FUNCTION__);
-            goto free_buckets_vec;
+            PRINTERR("%s: Could not create status bucket.\n", __FUNCTION__);
+            goto err;
         }
 
         /*
@@ -304,24 +308,255 @@ int load_status(struct cloudmig_ctx* ctx)
             if ((ret = create_status_file(ctx, *cur_bucket)))
             {
                 cloudmig_log(WARN_LVL,
-                             "An Error happened while creating the status bucket and file.\nPlease delete manually the bucket '%s' before restarting the tool...\n",
+"An Error happened while creating the status bucket and file.\n\
+Please delete manually the bucket '%s' before restarting the tool...\n",
                              ctx->status.bucket_name);
-                goto free_buckets_vec;
+                goto err;
             }
         }
     }
 
-    // Now, set where we are going to start/resume the migration from
+    // The status bucket IS created and clean.
+    goto end;
 
 
+err:
+    ret = EXIT_FAILURE;
+
+    if (ctx->status.bucket_name != NULL)
+    {
+        free(ctx->status.bucket_name);
+        ctx->status.bucket_name = NULL;
+    }
+
+end:
+    if (src_buckets != NULL)
+        dpl_vec_buckets_free(src_buckets);
+
+    return ret;
+}
+
+static int status_retrieve_states(struct cloudmig_ctx* ctx)
+{
+    assert(ctx != NULL);
+    assert(ctx->status.bucket_name != NULL);
+    assert(ctx->status.bucket_states == NULL);
+
+    dpl_status_t            dplret = DPL_SUCCESS;
+    int                     ret = EXIT_FAILURE;
+    dpl_vec_t               *objects;
+
+    // Retrieve the list of files for the buckets states
+    if ((dplret = dpl_list_bucket(ctx->src_ctx, ctx->status.bucket_name,
+                                  NULL, NULL, &objects, NULL)) != DPL_SUCCESS)
+    {
+        PRINTERR("%s: Could not list status bucket's files: %s\n",
+                 __FUNCTION__, ctx->status.bucket_name, dpl_status_str(dplret));
+        goto err;
+    }
+
+    // Allocate enough room for each bucket_state.
+    ctx->status.nb_states = objects->n_items;
+    ctx->status.cur_state = 0;
+    ctx->status.bucket_states = calloc(objects->n_items,
+                                       sizeof(*(ctx->status.bucket_states)));
+    if (ctx->status.bucket_states == NULL)
+    {
+        PRINTERR("%s: Could not allocate state data for each bucket: %s\n",
+                 __FUNCTION__, strerror(errno));
+        goto err;
+    }
+
+    // Now fill each one of these structures
+    dpl_object_t** objs = (dpl_object_t**)objects->array;
+    for (int i=0; i < objects->n_items; ++i)
+    {
+        ctx->status.bucket_states[i].filename = strdup(objs[i]->key);
+        if (ctx->status.bucket_states[i].filename == NULL)
+        {
+            PRINTERR("%s: Could not allocate state data for each bucket: %s\n",
+                     __FUNCTION__, strerror(errno));
+            goto err;
+        }
+        ctx->status.bucket_states[i].size = objs[i]->size;
+        ctx->status.bucket_states[i].next_entry_off = 0;
+        // The buffer will be read/allocated when needed.
+        // Otherwise, it may use up too much memory
+        ctx->status.bucket_states[i].buf = NULL;
+    }
+
+    ret = EXIT_SUCCESS;
+
+err:
+    if (ret == EXIT_FAILURE && ctx->status.bucket_states != NULL)
+    {
+        for (int i=0; i < ctx->status.nb_states; ++i)
+        {
+            if (ctx->status.bucket_states[i].filename)
+                free(ctx->status.bucket_states[i].filename);
+        }
+        free(ctx->status.bucket_states);
+        ctx->status.bucket_states = NULL;
+    }
+
+    if (objects != NULL)
+        dpl_vec_objects_free(objects);
+
+    return ret;
+}
 
 
-free_buckets_vec:
-    dpl_vec_buckets_free(src_buckets);
+/*
+ * Callback function for dpl_openread (needs a callback for each chunk
+ * of data received)
+ *
+ * It appends each chunk of data to the buf of the transfer_state
+ */
+static dpl_status_t status_append_buffer_to_bucket_state(void* ctx,
+                                                         char* buf,
+                                                         unsigned int len)
+{
+    struct transfer_state* state = ctx;
+    dpl_status_t    ret = DPL_FAILURE;
 
-free_status_name:
-    free(ctx->status.bucket_name);
-    ctx->status.bucket_name = NULL;
+    int newlen = state->next_entry_off + len;
+    state->buf = realloc(state->buf, newlen);
+    if (state->buf == NULL)
+    {
+        ret = DPL_ENOMEM;
+        goto err;
+    }
+    memmove(state->buf + state->next_entry_off, buf, len);
+    state->next_entry_off += len;
+
+    ret = DPL_SUCCESS;
+
+err:
+    
+    return ret;
+}
+
+/*
+ * Maps a bucket state's file into memory using dpl_openread.
+ */
+static int status_map_bucket_state(struct cloudmig_ctx* ctx,
+                                   struct transfer_state* bucket_state)
+{
+    dpl_status_t        dplret;
+    int                 ret = EXIT_FAILURE;
+    dpl_dict_t          *metadata;
+    char*               ctx_bucket = ctx->src_ctx->cur_bucket;
+
+    /*
+     * This function uses the bucket_state as private data for the callback.
+     *
+     * It uses the field next_entry_off to set the quantity of data received
+     * so it needs to be reset to 0 afterwards.
+     */
+    ctx->src_ctx->cur_bucket = ctx->status.bucket_name;
+    dplret = dpl_openread(ctx->src_ctx, bucket_state->filename,
+                          DPL_VFILE_FLAG_MD5, NULL,
+                          &status_append_buffer_to_bucket_state, bucket_state,
+                          &metadata);
+    if (dplret != DPL_SUCCESS)
+    {
+        PRINTERR("%s: Could not map bucket status file %s : %s\n",
+                 __FUNCTION__, bucket_state->filename, dpl_status_str(dplret));
+        goto err;
+    }
+
+    ret = EXIT_SUCCESS;
+
+err:
+    // Restore original bucket.
+    ctx->src_ctx->cur_bucket = ctx_bucket;
+
+    bucket_state->next_entry_off = 0;
+
+    if (metadata != NULL)
+        dpl_dict_free(metadata);
+
+    return ret;
+}
+
+
+/*
+ * The function allocates and retrieves the content of a bucket state file
+ * if it is to be read.
+ * It also frees the content of the bucket state files it already went over.
+ *
+ * 
+ */
+int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
+                                 struct file_transfer_state* filestate)
+{
+    assert(ctx != NULL);
+    assert(ctx->status.bucket_name != NULL);
+
+    int                     ret = EXIT_FAILURE;
+    struct file_state_entry *fste;
+
+    /*
+     * If the buckets states are not allocated, then create them
+     * in order to be able to follow the states evolutions.
+     */
+    if (ctx->status.bucket_states == NULL)
+    {
+        if (status_retrieve_states(ctx))
+            goto err;
+    }
+
+    /*
+     * For each file in the status bucket, read it entry by entry
+     * and stop when coming across an incomplete (/not migrated) entry.
+     *
+     * Begin at cur_state, and then next_entry_off in the buffer.
+     * If the buffer is not allocated, it's time to do it.
+     */
+    for (int i = ctx->status.cur_state; i < ctx->status.nb_states; ++i)
+    {
+        struct transfer_state*  bucket_state = &(ctx->status.bucket_states[i]);
+        if (bucket_state->buf == NULL
+            && status_map_bucket_state(ctx, bucket_state) == EXIT_FAILURE)
+            goto err;
+        // loop on the bucket state for each entry, until the end.
+        while (bucket_state->next_entry_off < bucket_state->size)
+        {
+            fste = (void*)(bucket_state->buf + bucket_state->next_entry_off);
+            // Check if this file has yet to be transfered
+            if (fste->offset < fste->size)
+            {
+                filestate->fixed.size = fste->size;
+                filestate->fixed.offset = fste->offset;
+                filestate->fixed.namlen = fste->namlen;
+                filestate->name = strdup((char*)(fste+1));
+                if (filestate->name == NULL)
+                {
+                    PRINTERR("%s: could not allocate memory: %s",
+                             __FUNCTION__, strerror(errno));
+                    goto err;
+                }
+
+                // Now update the next_entry_offset
+                bucket_state->next_entry_off += sizeof(*fste) + fste->namlen;
+                break ;
+            }
+            // Now update the next_entry_offset
+            bucket_state->next_entry_off += sizeof(*fste) + fste->namlen;
+        }
+        // Check for success then break if it did.
+        if (bucket_state->next_entry_off < bucket_state->size)
+            break ;
+        free(ctx->status.bucket_states[i].buf);
+        ctx->status.bucket_states[i].buf = NULL;
+    }
+
+    ret = EXIT_SUCCESS;
+
+err:
+    filestate->fixed.size = 0;
+    filestate->fixed.offset = 0;
+    filestate->fixed.namlen = 0;
 
     return ret;
 }
