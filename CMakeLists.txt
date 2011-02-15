@@ -72,6 +72,7 @@ SET(CLOUDMIG_SRC    src/main.c
                     src/options.c
                     src/log.c
                     src/load_profiles.c
+                    src/transfer.c
                     src/status.c
 )
 

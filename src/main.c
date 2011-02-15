@@ -46,8 +46,8 @@ int main(int argc, char* argv[])
     if (load_status(&ctx))
         return (EXIT_FAILURE);
 
-    struct file_transfer_state filestate;
-    if (status_next_incomplete_entry(&ctx, &filestate))
-        return (EXIT_FAILURE);
+//   if (migrate(&ctx))
+//       return (EXIT_FAILURE);
+
 	return (EXIT_SUCCESS);
 }
