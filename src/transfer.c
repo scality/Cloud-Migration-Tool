@@ -29,12 +29,6 @@
 
 #include "cloudmig.h"
 
-enum FileType
-{
-    TYPE_DIR,
-    TYPE_FILE
-};
-
 /*
  * This callback receives the data read from a source,
  * and writes it into the destination file.
@@ -84,12 +78,12 @@ create_directory(struct cloudmig_ctx* ctx,
  * Returns a value allowing to identify whether the file is
  * a directory or a standard file
  */
-static enum FileType
+static dpl_ftype_t
 get_migrating_file_type(struct file_transfer_state* filestate)
 {
     if (filestate->name[strlen(filestate->name) - 1] == '/')
-        return TYPE_DIR;
-    return TYPE_FILE;
+        return DPL_FTYPE_DIR;
+    return DPL_FTYPE_REG;
 }
 
 
@@ -109,10 +103,10 @@ migrate_loop(struct cloudmig_ctx* ctx)
     {
         switch (get_migrating_file_type(&cur_filestate))
         {
-        case TYPE_DIR:
+        case DPL_FTYPE_DIR:
             create_directory(ctx, &cur_filestate);
             break ;
-        case TYPE_FILE:
+        case DPL_FTYPE_REG:
             transfer_file(ctx, &cur_filestate);
             break ;
         default:
