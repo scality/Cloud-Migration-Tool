@@ -38,7 +38,8 @@ enum cloudmig_loglevel
 {
     DEBUG_LVL,
     INFO_LVL,
-    WARN_LVL
+    WARN_LVL,
+    ERR_LVL
 };
 
 void cloudmig_log(enum cloudmig_loglevel lvl, const char* format, ...);

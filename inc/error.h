@@ -28,23 +28,8 @@
 #define __CLOUDMIG_ERROR_H__
 
 /*
- * This macro allows defining your own format while prepending the program's
- * name.
- *
- * It considers that the whole format string should not be over 512 chars.
- * A buffer overflow is prevented by the use of the strncat function.
- *
- * We chose not to include the proper includes, and to let the source file (.c)
- * do it properly. The required includes are :
- * #include <stdio.h>
- * #include <string.h>
+ * This macro allows logging an ERROR while hiding the use of cloudmig_log
  */
-#define PRINTERR(msg, ...)  do\
-                            {\
-                                char format[512] = {0};\
-                                strcpy(format, "cloudmig: ");\
-                                strncat(format, msg, 509);\
-                                fprintf(stderr, format, __VA_ARGS__);\
-                            } while (0)
+#define PRINTERR(format, ...)  cloudmig_log(ERR_LVL, format, __VA_ARGS__)
 
 #endif /* ! __CLOUDMIG_ERROR_H__ */
