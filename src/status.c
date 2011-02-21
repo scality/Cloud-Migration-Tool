@@ -488,7 +488,8 @@ err:
  * 
  */
 int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
-                                 struct file_transfer_state* filestate)
+                                 struct file_transfer_state* filestate
+                                 char** bucket)
 {
     assert(ctx != NULL);
     assert(ctx->status.bucket_name != NULL);
@@ -526,6 +527,7 @@ int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
             // Check if this file has yet to be transfered
             if (fste->offset < fste->size)
             {
+                // First, fill the fste struct...
                 filestate->fixed.size = fste->size;
                 filestate->fixed.offset = fste->offset;
                 filestate->fixed.namlen = fste->namlen;
@@ -537,16 +539,26 @@ int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
                     goto err;
                 }
 
-                // Now update the next_entry_offset
+                // Second : Copy the bucket status file name and truncate it
+                if ((*bucket = strdup(bucket_state->filename)) == NULL)
+                {
+                    PRINTERR("%s: could not allocate memory: %s",
+                             __FUNCTION__, strerror(errno));
+                    goto err;
+                }
+                // Cut the string at the ".cloudmig" part to get the bucket
+                // Here the filename is valid, so it should never crash :
+                *(strrchr(*bucket, '.')) = '\0';
+
                 bucket_state->next_entry_off += sizeof(*fste) + fste->namlen;
                 break ;
             }
-            // Now update the next_entry_offset
             bucket_state->next_entry_off += sizeof(*fste) + fste->namlen;
         }
-        // Check for success then break if it did.
+
         if (bucket_state->next_entry_off < bucket_state->size)
             break ;
+
         free(ctx->status.bucket_states[i].buf);
         ctx->status.bucket_states[i].buf = NULL;
         ctx->status.cur_state = i; // update the current state file index.
@@ -556,10 +568,22 @@ int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
     if (ctx->status.cur_state == ctx->status.nb_states)
         ret = ENODATA;
 
+    return ret;
+
 err:
+    if(filestate->name)
+    {
+        free(filestate->name);
+        filestate->name = NULL;
+    }
     filestate->fixed.size = 0;
     filestate->fixed.offset = 0;
     filestate->fixed.namlen = 0;
+    if (*bucket)
+    {
+        free(*bucket);
+        *bucket = NULL;
+    }
 
     return ret;
 }

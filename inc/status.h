@@ -14,9 +14,14 @@
  */
 struct file_state_entry
 {
-    int32_t      namlen;     // calculated with ROUND_NAMLEN
-    int32_t      size;       // size of the file
-    int32_t      offset;     // offset/quantity already copied - Unused
+    int32_t     namlen;     // calculated with ROUND_NAMLEN
+    int32_t     size;       // size of the file
+    int32_t     offset;     // offset/quantity already copied
+    /*
+    int8_t      dpl_location;
+    int8_t      dpl_acl;
+    int16_t     padding;
+    */
 };
 
 /*
@@ -25,7 +30,7 @@ struct file_state_entry
 struct file_transfer_state
 {
     struct file_state_entry fixed;
-    char*                   name;
+    char                    *name;
 };
 
 
@@ -45,10 +50,10 @@ struct transfer_state
  */
 struct cloudmig_status
 {
-    char*                   bucket_name;
+    char                    *bucket_name;
     int                     nb_states;
     int                     cur_state;
-    struct transfer_state*  bucket_states;
+    struct transfer_state   *bucket_states;
 };
 
 
