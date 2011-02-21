@@ -34,10 +34,10 @@
  * and writes it into the destination file.
  */
 static dpl_status_t
-transfer_data_chunk()
+transfer_data_chunk(void* dst_hfile,
+                    char *buf, unsigned int len)
 {
-    // XXX TODO FIXME
-    return DPL_FAILURE;
+    return dpl_write((dpl_vfile_t*)dst_hfile, buf, len);
 }
 
 /*
@@ -46,32 +46,105 @@ transfer_data_chunk()
  * and starts the transfer with a reading callback that will
  * write the data read into the file that is to be written.
  */
+// TODO FIXME : Do it with the correct attributes
 static int
-transfer_file(struct cloudmig_ctx* ctx, struct file_transfer_state* filestate)
+transfer_file(struct cloudmig_ctx* ctx,
+              char* bucket,
+              struct file_transfer_state* filestate)
 {
-    int         ret = EXIT_FAILURE;
+    int                     ret = EXIT_FAILURE;
+    dpl_status_t            dplret;
+    char*                   bucket_dstctx = ctx->dest_ctx->cur_bucket;
+    char*                   bucket_srcctx = ctx->src_ctx->cur_bucket;
+    dpl_vfile_t             *dst_hfile;
 
-    // XXX TODO FIXME
-    (void)ctx;
-    (void)filestate;
-    goto err;
-    (void)transfer_data_chunk();
+    cloudmig_log(DEBUG_LVL,
+                 "[Migrating] : file is a regular file. %s\n",
+                 "Starting transfer...");
+
+    ctx->dest_ctx->cur_bucket = bucket;
+    ctx->src_ctx->cur_bucket = bucket;
+    
+
+    /*
+     * First, open the destination file for writing.
+     */
+    dplret = dpl_openwrite(ctx->dest_ctx, filestate->name,
+                           DPL_VFILE_FLAG_CREAT
+                                | DPL_VFILE_FLAG_MD5
+                                | DPL_VFILE_FLAG_ENCRYPT,
+                           NULL, // metadata
+                           DPL_CANNED_ACL_PRIVATE,
+                           filestate->fixed.size,
+                           &dst_hfile);
+    if (dplret != DPL_SUCCESS)
+    {
+        PRINTERR("%s: Could not open dest file %s in bucket %s : %s\n",
+                 __FUNCTION__, filestate->name, bucket, dpl_status_str(dplret));
+        goto err;
+    }
+
+    /*
+     * Then open the source file for reading, with a callback
+     * that will transfer each data chunk.
+     */
+    dplret = dpl_openread(ctx->src_ctx, filestate->name,
+                          DPL_VFILE_FLAG_MD5 | DPL_VFILE_FLAG_ENCRYPT,
+                          NULL, // condition
+                          transfer_data_chunk, dst_hfile,
+                          NULL); // metadatap
+    if (dplret != DPL_SUCCESS)
+    {
+        PRINTERR("%s: Could not open source file %s in bucket %s : %s\n",
+                 __FUNCTION__, filestate->name, bucket, dpl_status_str(dplret));
+        goto err;
+    }
+
+    /*
+     * And finally, close the destination file written...
+     */
+    dplret = dpl_close(dst_hfile);
+    if (dplret != DPL_SUCCESS)
+    {
+        PRINTERR("%s: Could not close destination file %s in bucket %s : %s\n",
+                 __FUNCTION__, filestate->name, bucket, dpl_status_str(dplret));
+    }
 
     ret = EXIT_SUCCESS;
 
 err:
+    ctx->dest_ctx->cur_bucket = bucket_dstctx;
+    ctx->src_ctx->cur_bucket = bucket_srcctx;
 
     return ret;
 }
 
 static int
 create_directory(struct cloudmig_ctx* ctx,
+                 char* bucket,
                  struct file_transfer_state* filestate)
 { 
-    //XXX TODO FIXME
-    (void)ctx;
-    (void)filestate;
-    return EXIT_FAILURE;
+    int             ret = EXIT_FAILURE;
+    dpl_status_t    dplret = DPL_SUCCESS;
+    char*           bck_ctx = ctx->dest_ctx->cur_bucket;
+
+    cloudmig_log(DEBUG_LVL,
+                 "[Migrating] : file is a directory : creating it.\n");
+    ctx->dest_ctx->cur_bucket = bucket;
+    dplret = dpl_mkdir(ctx->dest_ctx, filestate->name);
+    // TODO FIXME With correct attributes
+    if (dplret != DPL_SUCCESS)
+    {
+        PRINTERR("%s: Could not create destination dir '%s' in bucket %s\n",
+                 __FUNCTION__, filestate->name, bucket);
+        goto end;
+    }
+
+    ret = EXIT_SUCCESS;
+end:
+    ctx->dest_ctx->cur_bucket = bck_ctx;
+
+    return ret;
 }
 
 /*
@@ -97,22 +170,32 @@ migrate_loop(struct cloudmig_ctx* ctx)
 {
     int                         ret = EXIT_FAILURE;
     struct file_transfer_state  cur_filestate;
+    char*                       bucket;
 
-    while ((ret = status_next_incomplete_entry(ctx, &cur_filestate))
+    // The call allocates the buffer for the bucket, so we must free it
+    while ((ret = status_next_incomplete_entry(ctx, &cur_filestate, &bucket))
            == EXIT_SUCCESS)
     {
+        cloudmig_log(DEBUG_LVL,
+                "[Migrating] : starting migration of file %s from bucket %s.\n",
+                     cur_filestate.name, bucket);
         switch (get_migrating_file_type(&cur_filestate))
         {
         case DPL_FTYPE_DIR:
-            create_directory(ctx, &cur_filestate);
+            create_directory(ctx, bucket, &cur_filestate);
             break ;
         case DPL_FTYPE_REG:
-            transfer_file(ctx, &cur_filestate);
+            transfer_file(ctx, bucket, &cur_filestate);
             break ;
         default:
             break ;
         }
-        //status_update_entry(ctx, &cur_filestate);
+        //status_update_entry(ctx, bucket, &cur_filestate);
+        cloudmig_log(INFO_LVL,
+                     "[Migrating] : file %s from bucket %s migrated.\n",
+                     cur_filestate.name, bucket);
+        free(bucket);
+        bucket = NULL;
     }
     return (ret);
 }
@@ -140,6 +223,9 @@ create_dest_buckets(struct cloudmig_ctx* ctx)
     }
 
     dpl_bucket_t** curbck = (dpl_bucket_t**)buckets->array;
+    cloudmig_log(DEBUG_LVL,
+                 "[Migrating] : creating the %i destination buckets.\n",
+                 ctx->status.nb_states);
     for (int i = ctx->status.nb_states; i < ctx->status.nb_states; ++i)
     {
         int n;
@@ -151,7 +237,17 @@ create_dest_buckets(struct cloudmig_ctx* ctx)
                 break ;
         }
         if (n != buckets->n_items) // means the bucket already exists
+        {
+            cloudmig_log(DEBUG_LVL,
+                         "[Migrating] : dest bucket %.*s already created.\n",
+                         strlen(ctx->status.bucket_states[i].filename) - 9,
+                         ctx->status.bucket_states[i].filename);
             continue ;
+        }
+        cloudmig_log(DEBUG_LVL,
+                     "[Migrating] : creating destination bucket %.*s.\n",
+                     strlen(ctx->status.bucket_states[i].filename) - 9,
+                     ctx->status.bucket_states[i].filename);
 
         name = strdup(ctx->status.bucket_states[i].filename);
         if (name == NULL)
@@ -163,6 +259,8 @@ create_dest_buckets(struct cloudmig_ctx* ctx)
         char *ext = strrchr(name, '.');
         if (ext == NULL || strcmp(ext, ".cloudmig") != 0)
             goto next;
+        // Cut the string at the ".cloudmig" part to get the bucket's name
+        *ext = '\0';
 
 
         /*
@@ -173,13 +271,28 @@ create_dest_buckets(struct cloudmig_ctx* ctx)
          *  - Get the acl
          *  - Create the new bucket with appropriate informations.
          */
-        // TODO FIXME XXX
-
+        // TODO FIXME with correct attributes
+        // For now, let's use some defaults caracs :
+        ret = dpl_make_bucket(ctx->dest_ctx, name,
+                              DPL_LOCATION_CONSTRAINT_US_STANDARD,
+                              DPL_CANNED_ACL_PRIVATE);
+        if (ret != DPL_SUCCESS)
+        {
+            PRINTERR("%s: Could not create destination bucket %s: %s\n",
+                     __FUNCTION__, name, dpl_status_str(dplret));
+            goto err;
+        }
 next:
         free(name);
         name = NULL;
     }
+
+    ret = EXIT_SUCCESS;
+
 err:
+    if (name)
+        free(name);
+
     if (buckets != NULL)
         dpl_vec_buckets_free(buckets);
 
@@ -198,23 +311,31 @@ migrate(struct cloudmig_ctx* ctx)
 {
     int                         ret = EXIT_FAILURE;
 
+    cloudmig_log(DEBUG_LVL, "Starting migration...\n");
     /*
      * Since th S3 api does not allow an infinite number of buckets,
      * we can think ahead of time and create all the buckets that we'll
      * need.
      */
     ret = create_dest_buckets(ctx);
-
+    if (ret != EXIT_SUCCESS)
+        goto err;
+    cloudmig_log(DEBUG_LVL, "Destination buckets created with success...\n");
 
     ret = migrate_loop(ctx);
     // Check if it was the end of the transfer by checking ret agains ENODATA
     if (ret == ENODATA)
     {
+        cloudmig_log(DEBUG_LVL, "Migration finished with success !\n");
         // TODO FIXME XXX
         // Then we have to remove the data from the source
+        cloudmig_log(WARN_LVL, "Deletion of source files not implemented !\n");
     }
     else
+    {
+        PRINTERR("An error occured during the migration.\n", 0);
         goto err;
+    }
 
     ret = EXIT_SUCCESS;
 

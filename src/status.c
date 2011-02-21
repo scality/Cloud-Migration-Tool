@@ -488,7 +488,7 @@ err:
  * 
  */
 int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
-                                 struct file_transfer_state* filestate
+                                 struct file_transfer_state* filestate,
                                  char** bucket)
 {
     assert(ctx != NULL);
