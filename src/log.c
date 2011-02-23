@@ -62,7 +62,7 @@ void cloudmig_log(enum cloudmig_loglevel lvl, const char* format, ...)
         }
         strcat(fmt, format);
         va_start(args, format);
-        vprintf(format, args);
+        vprintf(fmt, args);
         va_end(args);
         free(fmt);
     }
