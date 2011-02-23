@@ -520,13 +520,19 @@ int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
         while (bucket_state->next_entry_off < bucket_state->size)
         {
             fste = (void*)(bucket_state->buf + bucket_state->next_entry_off);
-            // Check if this file has yet to be transfered
-            if (fste->offset < fste->size)
+            /*
+             * Check if this file has yet to be transfered
+             *
+             * Here we have to permanently use ntohl over fste's values,
+             * since the int32_t are stored in network byte order.
+             */
+            if (ntohl(fste->offset) < ntohl(fste->size))
             {
                 // First, fill the fste struct...
-                filestate->fixed.size = fste->size;
-                filestate->fixed.offset = fste->offset;
-                filestate->fixed.namlen = fste->namlen;
+                filestate->fixed.size = ntohl(fste->size);
+                filestate->fixed.offset = ntohl(fste->offset);
+                filestate->fixed.namlen = ntohl(fste->namlen);
+                // Use pointer arithmetics to get the name after the fste
                 filestate->name = strdup((char*)(fste+1));
                 if (filestate->name == NULL)
                 {
@@ -546,10 +552,11 @@ int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
                 // Here the filename is valid, so it should never crash :
                 *(strrchr(*bucket, '.')) = '\0';
 
-                bucket_state->next_entry_off += sizeof(*fste) + fste->namlen;
+                bucket_state->next_entry_off += sizeof(*fste)
+                                                + filestate->fixed.namlen;
                 break ;
             }
-            bucket_state->next_entry_off += sizeof(*fste) + fste->namlen;
+            bucket_state->next_entry_off += sizeof(*fste) + ntohl(fste->namlen);
         }
 
         if (bucket_state->next_entry_off < bucket_state->size)
