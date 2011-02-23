@@ -248,6 +248,74 @@ end:
     return ret;
 }
 
+static int status_retrieve_states(struct cloudmig_ctx* ctx)
+{
+    assert(ctx != NULL);
+    assert(ctx->status.bucket_name != NULL);
+    assert(ctx->status.bucket_states == NULL);
+
+    dpl_status_t            dplret = DPL_SUCCESS;
+    int                     ret = EXIT_FAILURE;
+    dpl_vec_t               *objects;
+
+    // Retrieve the list of files for the buckets states
+    if ((dplret = dpl_list_bucket(ctx->src_ctx, ctx->status.bucket_name,
+                                  NULL, NULL, &objects, NULL)) != DPL_SUCCESS)
+    {
+        PRINTERR("%s: Could not list status bucket's files: %s\n",
+                 __FUNCTION__, ctx->status.bucket_name, dpl_status_str(dplret));
+        goto err;
+    }
+
+    // Allocate enough room for each bucket_state.
+    ctx->status.nb_states = objects->n_items;
+    ctx->status.cur_state = 0;
+    ctx->status.bucket_states = calloc(objects->n_items,
+                                       sizeof(*(ctx->status.bucket_states)));
+    if (ctx->status.bucket_states == NULL)
+    {
+        PRINTERR("%s: Could not allocate state data for each bucket: %s\n",
+                 __FUNCTION__, strerror(errno));
+        goto err;
+    }
+
+    // Now fill each one of these structures
+    dpl_object_t** objs = (dpl_object_t**)objects->array;
+    for (int i=0; i < objects->n_items; ++i)
+    {
+        ctx->status.bucket_states[i].filename = strdup(objs[i]->key);
+        if (ctx->status.bucket_states[i].filename == NULL)
+        {
+            PRINTERR("%s: Could not allocate state data for each bucket: %s\n",
+                     __FUNCTION__, strerror(errno));
+            goto err;
+        }
+        ctx->status.bucket_states[i].size = objs[i]->size;
+        ctx->status.bucket_states[i].next_entry_off = 0;
+        // The buffer will be read/allocated when needed.
+        // Otherwise, it may use up too much memory
+        ctx->status.bucket_states[i].buf = NULL;
+    }
+
+    ret = EXIT_SUCCESS;
+
+err:
+    if (ret == EXIT_FAILURE && ctx->status.bucket_states != NULL)
+    {
+        for (int i=0; i < ctx->status.nb_states; ++i)
+        {
+            if (ctx->status.bucket_states[i].filename)
+                free(ctx->status.bucket_states[i].filename);
+        }
+        free(ctx->status.bucket_states);
+        ctx->status.bucket_states = NULL;
+    }
+
+    if (objects != NULL)
+        dpl_vec_objects_free(objects);
+
+    return ret;
+}
 
 int load_status(struct cloudmig_ctx* ctx)
 {
@@ -315,8 +383,15 @@ Please delete manually the bucket '%s' before restarting the tool...\n",
             }
         }
     }
+    // The status bucket IS created, filled and clean.
 
-    // The status bucket IS created and clean.
+    /*
+     * create the buckets states in order to be able
+     * to follow the states evolutions.
+     */
+    if (status_retrieve_states(ctx))
+        goto err;
+
     goto end;
 
 
@@ -332,75 +407,6 @@ err:
 end:
     if (src_buckets != NULL)
         dpl_vec_buckets_free(src_buckets);
-
-    return ret;
-}
-
-static int status_retrieve_states(struct cloudmig_ctx* ctx)
-{
-    assert(ctx != NULL);
-    assert(ctx->status.bucket_name != NULL);
-    assert(ctx->status.bucket_states == NULL);
-
-    dpl_status_t            dplret = DPL_SUCCESS;
-    int                     ret = EXIT_FAILURE;
-    dpl_vec_t               *objects;
-
-    // Retrieve the list of files for the buckets states
-    if ((dplret = dpl_list_bucket(ctx->src_ctx, ctx->status.bucket_name,
-                                  NULL, NULL, &objects, NULL)) != DPL_SUCCESS)
-    {
-        PRINTERR("%s: Could not list status bucket's files: %s\n",
-                 __FUNCTION__, ctx->status.bucket_name, dpl_status_str(dplret));
-        goto err;
-    }
-
-    // Allocate enough room for each bucket_state.
-    ctx->status.nb_states = objects->n_items;
-    ctx->status.cur_state = 0;
-    ctx->status.bucket_states = calloc(objects->n_items,
-                                       sizeof(*(ctx->status.bucket_states)));
-    if (ctx->status.bucket_states == NULL)
-    {
-        PRINTERR("%s: Could not allocate state data for each bucket: %s\n",
-                 __FUNCTION__, strerror(errno));
-        goto err;
-    }
-
-    // Now fill each one of these structures
-    dpl_object_t** objs = (dpl_object_t**)objects->array;
-    for (int i=0; i < objects->n_items; ++i)
-    {
-        ctx->status.bucket_states[i].filename = strdup(objs[i]->key);
-        if (ctx->status.bucket_states[i].filename == NULL)
-        {
-            PRINTERR("%s: Could not allocate state data for each bucket: %s\n",
-                     __FUNCTION__, strerror(errno));
-            goto err;
-        }
-        ctx->status.bucket_states[i].size = objs[i]->size;
-        ctx->status.bucket_states[i].next_entry_off = 0;
-        // The buffer will be read/allocated when needed.
-        // Otherwise, it may use up too much memory
-        ctx->status.bucket_states[i].buf = NULL;
-    }
-
-    ret = EXIT_SUCCESS;
-
-err:
-    if (ret == EXIT_FAILURE && ctx->status.bucket_states != NULL)
-    {
-        for (int i=0; i < ctx->status.nb_states; ++i)
-        {
-            if (ctx->status.bucket_states[i].filename)
-                free(ctx->status.bucket_states[i].filename);
-        }
-        free(ctx->status.bucket_states);
-        ctx->status.bucket_states = NULL;
-    }
-
-    if (objects != NULL)
-        dpl_vec_objects_free(objects);
 
     return ret;
 }
@@ -496,16 +502,6 @@ int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
 
     int                     ret = EXIT_FAILURE;
     struct file_state_entry *fste;
-
-    /*
-     * If the buckets states are not allocated, then create them
-     * in order to be able to follow the states evolutions.
-     */
-    if (ctx->status.bucket_states == NULL)
-    {
-        if (status_retrieve_states(ctx))
-            goto err;
-    }
 
     /*
      * For each file in the status bucket, read it entry by entry
