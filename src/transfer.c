@@ -171,32 +171,65 @@ migrate_loop(struct cloudmig_ctx* ctx)
     int                         ret = EXIT_FAILURE;
     struct file_transfer_state  cur_filestate;
     char*                       bucket;
+    int                         failures;
 
     // The call allocates the buffer for the bucket, so we must free it
+    // The same goes for the cur_filestate's name field.
     while ((ret = status_next_incomplete_entry(ctx, &cur_filestate, &bucket))
            == EXIT_SUCCESS)
     {
         cloudmig_log(DEBUG_LVL,
                 "[Migrating] : starting migration of file %s from bucket %s.\n",
                      cur_filestate.name, bucket);
+        failures = 0;
+retry:
         switch (get_migrating_file_type(&cur_filestate))
         {
         case DPL_FTYPE_DIR:
-            create_directory(ctx, bucket, &cur_filestate);
+            ret = create_directory(ctx, bucket, &cur_filestate);
+            if (ret != EXIT_SUCCESS)
+            {
+                if (++failures < 3)
+                {
+                    cloudmig_log(DEBUG_LVL,
+                    "[Migrating] : failure, retrying migration of file %s.\n",
+                    cur_filestate.name);
+                    goto retry;
+                }
+                goto end;
+            }
             break ;
         case DPL_FTYPE_REG:
-            transfer_file(ctx, bucket, &cur_filestate);
+            ret = transfer_file(ctx, bucket, &cur_filestate) ;
+            if (ret != EXIT_SUCCESS)
+            {
+                if (++failures < 3)
+                {
+                    goto retry;
+                }
+                goto end;
+            }
             break ;
         default:
             break ;
         }
         //status_update_entry(ctx, bucket, &cur_filestate);
+
         cloudmig_log(INFO_LVL,
                      "[Migrating] : file %s from bucket %s migrated.\n",
                      cur_filestate.name, bucket);
         free(bucket);
         bucket = NULL;
+
+        free(cur_filestate.name);
+        cur_filestate.name = NULL;
     }
+end:
+    if (bucket)
+        free(bucket);
+    if (cur_filestate.name)
+        free(cur_filestate.name);
+
     return (ret);
 }
 
