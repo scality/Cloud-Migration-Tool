@@ -259,10 +259,10 @@ create_dest_buckets(struct cloudmig_ctx* ctx)
     cloudmig_log(DEBUG_LVL,
                  "[Migrating] : creating the %i destination buckets.\n",
                  ctx->status.nb_states);
-    for (int i = ctx->status.nb_states; i < ctx->status.nb_states; ++i)
+    for (int i = 0; i < ctx->status.nb_states; ++i)
     {
         int n;
-        for  (n = 0; n < buckets->n_items; ++i)
+        for  (n = 0; n < buckets->n_items; ++n)
         {
             if (strncmp(curbck[n]->name,
                         ctx->status.bucket_states[i].filename,
