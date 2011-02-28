@@ -26,6 +26,9 @@
 
 #include <errno.h>
 #include <string.h>
+#include <stdbool.h>
+#include <time.h>
+#include <unistd.h>
 
 #include "cloudmig.h"
 
@@ -55,7 +58,7 @@
  *
  * This function returns a buffer of allocated memory that has to be freed
  */
-static char*     compute_status_bucket(struct cloudmig_ctx* ctx)
+char*     compute_status_bucket(struct cloudmig_ctx* ctx)
 {
     // Those should not be invalid.
     assert(ctx);
@@ -89,234 +92,6 @@ static char*     compute_status_bucket(struct cloudmig_ctx* ctx)
     return (name);
 }
 
-static int create_status_bucket(struct cloudmig_ctx* ctx)
-{
-    assert(ctx != NULL);
-    assert(ctx->status.bucket_name != NULL);
-
-    dpl_status_t    ret;
-
-    ret = dpl_make_bucket(ctx->src_ctx, ctx->status.bucket_name,
-                          DPL_LOCATION_CONSTRAINT_US_STANDARD,
-                          DPL_CANNED_ACL_PRIVATE);
-    if (ret != DPL_SUCCESS)
-    {
-        PRINTERR("%s: Could not create status bucket '%s' (%i bytes): %s\n",
-                 __FUNCTION__, ctx->status.bucket_name, strlen(ctx->status.bucket_name),
-                 dpl_status_str(ret));
-        return EXIT_FAILURE;
-    }
-    return EXIT_SUCCESS;
-}
-
-static size_t calc_status_file_size(dpl_object_t** objs, int n_items)
-{
-    size_t size = 0;
-    for (int i = 0; i < n_items; ++i, ++objs)
-    {
-        int len = strlen((*objs)->key);
-        size += sizeof(struct file_state_entry); // fixed state entry data
-        size += ROUND_NAMLEN(len); // namlen rounded to superior 4
-    }
-    return size;
-}
-
-static int create_status_file(struct cloudmig_ctx* ctx, dpl_bucket_t* bucket)
-{
-    assert(ctx != NULL);
-    assert(ctx->src_ctx != NULL);
-    assert(bucket != NULL);
-
-    int             ret = EXIT_SUCCESS;
-    dpl_status_t    dplret = DPL_SUCCESS;
-    dpl_vec_t*      objects = NULL;
-    dpl_vfile_t*    bucket_status = NULL;
-    char            *ctx_bucket;
-    // Data for the bucket status file
-    int             namlen;
-    size_t          filesize;
-    char            *filename = NULL;
-    // Data for each entry of the bucket status file
-    struct file_state_entry entry;
-    char            *entry_filename = NULL;
-
-    if ((dplret = dpl_list_bucket(ctx->src_ctx, bucket->name,
-                                  NULL, NULL, &objects, NULL)) != DPL_SUCCESS)
-    {
-        PRINTERR("%s: Could not list bucket %s : %s\n", __FUNCTION__,
-                 bucket->name, dpl_status_str(dplret));
-        ret = EXIT_FAILURE;
-        goto end;
-    }
-
-
-    namlen = strlen(bucket->name) + 10;
-    filename = malloc(namlen * sizeof(*filename));
-    if (filename == NULL)
-    {
-        PRINTERR("%s: Could not save bucket '%s' status : %s\n",
-                 __FUNCTION__, bucket->name, strerror(errno));
-        ret = EXIT_FAILURE;
-        goto end;
-    }
-    strcpy(filename, bucket->name);
-    strcat(filename, ".cloudmig");
-    cloudmig_log(DEBUG_LVL, "[Creating status] Filename for bucket %s : %s\n",
-                 bucket->name, filename);
-
-
-    // Save the bucket and set the cloudmig_status bucket as current.
-    ctx_bucket = ctx->src_ctx->cur_bucket;
-    ctx->src_ctx->cur_bucket = ctx->status.bucket_name;
-    filesize = calc_status_file_size((dpl_object_t**)(objects->array),
-                                     objects->n_items);
-    if ((dplret = dpl_openwrite(ctx->src_ctx, filename, DPL_VFILE_FLAG_CREAT,
-                                NULL, DPL_CANNED_ACL_PRIVATE, filesize,
-                                &bucket_status)))
-    {
-        PRINTERR("%s: Could not create bucket %s's status file : %s\n",
-                 __FUNCTION__, bucket->name, dpl_status_str(dplret));
-        ret = EXIT_FAILURE;
-        goto end;
-    }
-
-    /*
-     * For each file, write the part matching the file.
-     */
-    dpl_object_t** cur_object = (dpl_object_t**)objects->array;
-    cloudmig_log(DEBUG_LVL,
-                 "[Creating status] Bucket %s (%i objects) in file '%s':\n",
-                 bucket->name, objects->n_items, filename);
-    for (int i = 0; i < objects->n_items; ++i, ++cur_object)
-    {
-        cloudmig_log(DEBUG_LVL, "[Creating status] \t file : '%s'(%i bytes)\n",
-                     (*cur_object)->key, (*cur_object)->size);
-        int len = strlen((*cur_object)->key);
-        entry.namlen = ROUND_NAMLEN(len);
-        entry.size = (*cur_object)->size;
-        entry.offset = 0;
-        entry_filename = calloc(entry.namlen, sizeof(*entry_filename));
-        if (entry_filename == NULL)
-        {
-            PRINTERR("%s: Could not allocate file state entry : %s\n",
-                     __FUNCTION__, strerror(errno));
-            ret = EXIT_FAILURE;
-            goto end;
-        }
-        // already padded with zeroes, copy only the string
-        memcpy(entry_filename, (*cur_object)->key, len);
-        // translate each integer into network byte order
-        entry.namlen = htonl(entry.namlen);
-        entry.size = htonl(entry.size);
-        entry.offset = htonl(entry.offset);
-        dplret = dpl_write(bucket_status, (char*)(&entry), sizeof(entry));
-        if (dplret != DPL_SUCCESS)
-        {
-            PRINTERR("%s: Could not send file entry: %s\n",
-                     __FUNCTION__, dpl_status_str(dplret));
-            ret = EXIT_FAILURE;
-            goto end;
-        }
-        dplret = dpl_write(bucket_status, entry_filename, ROUND_NAMLEN(len));
-        if (dplret != DPL_SUCCESS)
-        {
-            PRINTERR("%s: Could not send file entry: %s\n",
-                     __FUNCTION__, dpl_status_str(dplret));
-            ret = EXIT_FAILURE;
-            goto end;
-        }
-    }
-    cloudmig_log(DEBUG_LVL, "[Creating status] Bucket %s: SUCCESS.\n",
-                 bucket->name);
-
-    // Now that's done, free the memory allocated by the libdroplet
-    // And restore the source ctx's cur_bucket
-end:
-    if (entry_filename != NULL)
-        free(entry_filename);
-
-    if (bucket_status != NULL)
-        dpl_close(bucket_status);
-
-    if (filename != NULL)
-        free(filename);
-
-    if (objects != NULL)
-        dpl_vec_objects_free(objects);
-
-    ctx->src_ctx->cur_bucket = ctx_bucket;
-    return ret;
-}
-
-static int status_retrieve_states(struct cloudmig_ctx* ctx)
-{
-    assert(ctx != NULL);
-    assert(ctx->status.bucket_name != NULL);
-    assert(ctx->status.bucket_states == NULL);
-
-    dpl_status_t            dplret = DPL_SUCCESS;
-    int                     ret = EXIT_FAILURE;
-    dpl_vec_t               *objects;
-
-    // Retrieve the list of files for the buckets states
-    if ((dplret = dpl_list_bucket(ctx->src_ctx, ctx->status.bucket_name,
-                                  NULL, NULL, &objects, NULL)) != DPL_SUCCESS)
-    {
-        PRINTERR("%s: Could not list status bucket's files: %s\n",
-                 __FUNCTION__, ctx->status.bucket_name, dpl_status_str(dplret));
-        goto err;
-    }
-
-    // Allocate enough room for each bucket_state.
-    ctx->status.nb_states = objects->n_items;
-    ctx->status.cur_state = 0;
-    ctx->status.bucket_states = calloc(objects->n_items,
-                                       sizeof(*(ctx->status.bucket_states)));
-    if (ctx->status.bucket_states == NULL)
-    {
-        PRINTERR("%s: Could not allocate state data for each bucket: %s\n",
-                 __FUNCTION__, strerror(errno));
-        goto err;
-    }
-
-    // Now fill each one of these structures
-    dpl_object_t** objs = (dpl_object_t**)objects->array;
-    for (int i=0; i < objects->n_items; ++i)
-    {
-        ctx->status.bucket_states[i].filename = strdup(objs[i]->key);
-        if (ctx->status.bucket_states[i].filename == NULL)
-        {
-            PRINTERR("%s: Could not allocate state data for each bucket: %s\n",
-                     __FUNCTION__, strerror(errno));
-            goto err;
-        }
-        ctx->status.bucket_states[i].size = objs[i]->size;
-        ctx->status.bucket_states[i].next_entry_off = 0;
-        // The buffer will be read/allocated when needed.
-        // Otherwise, it may use up too much memory
-        ctx->status.bucket_states[i].buf = NULL;
-    }
-
-    ret = EXIT_SUCCESS;
-
-err:
-    if (ret == EXIT_FAILURE && ctx->status.bucket_states != NULL)
-    {
-        for (int i=0; i < ctx->status.nb_states; ++i)
-        {
-            if (ctx->status.bucket_states[i].filename)
-                free(ctx->status.bucket_states[i].filename);
-        }
-        free(ctx->status.bucket_states);
-        ctx->status.bucket_states = NULL;
-    }
-
-    if (objects != NULL)
-        dpl_vec_objects_free(objects);
-
-    return ret;
-}
-
 int load_status(struct cloudmig_ctx* ctx)
 {
      assert(ctx);
@@ -338,8 +113,8 @@ int load_status(struct cloudmig_ctx* ctx)
      * By the way, we do not care about the destination's bucket list,
      * since the user should know that the tool makes a forceful copy.
      */
-    if ((dplret = dpl_list_all_my_buckets(ctx->src_ctx,
-                                       &src_buckets)) != DPL_SUCCESS)
+    dplret = dpl_list_all_my_buckets(ctx->src_ctx, &src_buckets);
+    if (dplret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not list source's buckets : %s\n",
                  __FUNCTION__, dpl_status_str(dplret));
@@ -359,28 +134,11 @@ int load_status(struct cloudmig_ctx* ctx)
     }
     if (resuming == 0)// Then we must build the new status file through
     {
-        // First, create the status bucket since it didn't exist.
-        if ((ret = create_status_bucket(ctx)))
+        if ((ret = create_status(ctx, src_buckets)))
         {
-            PRINTERR("%s: Could not create status bucket.\n", __FUNCTION__);
+            PRINTERR("%s: Could not create the migration's status.\n",
+                     __FUNCTION__);
             goto err;
-        }
-
-        /*
-         * For each bucket, we create a file named after it in the
-         * status bucket.
-         */
-        dpl_bucket_t**  cur_bucket = (dpl_bucket_t**)src_buckets->array;
-        for (int i = 0; i < src_buckets->n_items; ++i, ++cur_bucket)
-        {
-            if ((ret = create_status_file(ctx, *cur_bucket)))
-            {
-                cloudmig_log(WARN_LVL,
-"An Error happened while creating the status bucket and file.\n\
-Please delete manually the bucket '%s' before restarting the tool...\n",
-                             ctx->status.bucket_name);
-                goto err;
-            }
         }
     }
     // The status bucket IS created, filled and clean.

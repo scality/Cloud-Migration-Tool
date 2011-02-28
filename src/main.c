@@ -46,8 +46,8 @@ int main(int argc, char* argv[])
     if (load_status(&ctx))
         return (EXIT_FAILURE);
 
-//   if (migrate(&ctx))
-//       return (EXIT_FAILURE);
+//    if (migrate(&ctx))
+//        return (EXIT_FAILURE);
 
 	return (EXIT_SUCCESS);
 }

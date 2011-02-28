@@ -26,6 +26,7 @@
 //
 #include <errno.h>
 #include <string.h>
+#include <stdbool.h>
 
 #include "cloudmig.h"
 
@@ -235,105 +236,6 @@ end:
 
 
 /*
- * First thing do to when starting the migration :
- *
- * Check the destination buckets exist, or create them if not.
- */
-static int
-create_dest_buckets(struct cloudmig_ctx* ctx)
-{
-    int             ret = EXIT_FAILURE;
-    dpl_status_t    dplret = DPL_FAILURE;
-    char            *name;
-    dpl_vec_t       *buckets;
-
-    dplret = dpl_list_all_my_buckets(ctx->dest_ctx, &buckets);
-    if (dplret != DPL_SUCCESS)
-    {
-        PRINTERR("%s: Could not list destination's buckets : %s\n",
-                 __FUNCTION__, dpl_status_str(dplret));
-        goto err;
-    }
-
-    dpl_bucket_t** curbck = (dpl_bucket_t**)buckets->array;
-    cloudmig_log(DEBUG_LVL,
-                 "[Migrating] : creating the %i destination buckets.\n",
-                 ctx->status.nb_states);
-    for (int i = 0; i < ctx->status.nb_states; ++i)
-    {
-        int n;
-        for  (n = 0; n < buckets->n_items; ++n)
-        {
-            if (strncmp(curbck[n]->name,
-                        ctx->status.bucket_states[i].filename,
-                        strlen(curbck[n]->name)) == 0)
-                break ;
-        }
-        if (n != buckets->n_items) // means the bucket already exists
-        {
-            cloudmig_log(DEBUG_LVL,
-                         "[Migrating] : dest bucket %.*s already created.\n",
-                         strlen(ctx->status.bucket_states[i].filename) - 9,
-                         ctx->status.bucket_states[i].filename);
-            continue ;
-        }
-        cloudmig_log(DEBUG_LVL,
-                     "[Migrating] : creating destination bucket %.*s.\n",
-                     strlen(ctx->status.bucket_states[i].filename) - 9,
-                     ctx->status.bucket_states[i].filename);
-
-        name = strdup(ctx->status.bucket_states[i].filename);
-        if (name == NULL)
-        {
-            PRINTERR("%s: Could not create every destination bucket: %s\n",
-                     __FUNCTION__, strerror(errno));
-            goto err;
-        }
-        char *ext = strrchr(name, '.');
-        if (ext == NULL || strcmp(ext, ".cloudmig") != 0)
-            goto next;
-        // Cut the string at the ".cloudmig" part to get the bucket's name
-        *ext = '\0';
-
-
-        /*
-         * Here we want to create a bucket with the same attributes as the
-         * source bucket. (acl and location constraints)
-         *
-         *  - Get the location constraint
-         *  - Get the acl
-         *  - Create the new bucket with appropriate informations.
-         */
-        // TODO FIXME with correct attributes
-        // For now, let's use some defaults caracs :
-        ret = dpl_make_bucket(ctx->dest_ctx, name,
-                              DPL_LOCATION_CONSTRAINT_US_STANDARD,
-                              DPL_CANNED_ACL_PRIVATE);
-        if (ret != DPL_SUCCESS)
-        {
-            PRINTERR("%s: Could not create destination bucket %s: %s\n",
-                     __FUNCTION__, name, dpl_status_str(dplret));
-            goto err;
-        }
-next:
-        free(name);
-        name = NULL;
-    }
-
-    ret = EXIT_SUCCESS;
-
-err:
-    if (name)
-        free(name);
-
-    if (buckets != NULL)
-        dpl_vec_buckets_free(buckets);
-
-    return ret;
-}
-
-
-/*
  * Main migration function.
  *
  * It manages every step of the migration, and the deletion of old objects
@@ -350,10 +252,6 @@ migrate(struct cloudmig_ctx* ctx)
      * we can think ahead of time and create all the buckets that we'll
      * need.
      */
-    ret = create_dest_buckets(ctx);
-    if (ret != EXIT_SUCCESS)
-        goto err;
-    cloudmig_log(DEBUG_LVL, "Destination buckets created with success...\n");
 
     ret = migrate_loop(ctx);
     // Check if it was the end of the transfer by checking ret agains ENODATA

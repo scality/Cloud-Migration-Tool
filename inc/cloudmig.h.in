@@ -51,8 +51,8 @@
  */
 struct cloudmig_ctx
 {
-    dpl_ctx_t*              src_ctx;
-    dpl_ctx_t*              dest_ctx;
+    dpl_ctx_t               *src_ctx;
+    dpl_ctx_t               *dest_ctx;
     struct cloudmig_status  status;
 };
 
@@ -60,12 +60,20 @@ struct cloudmig_ctx
 /*
  * Required prototypes
  */
-int retrieve_opts(int argc, char* argv[]);
-int load_profiles(struct cloudmig_ctx* ctx);
-int load_status(struct cloudmig_ctx* ctx);
-int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
-                                 struct file_transfer_state* filestate,
-                                 char ** bucket);
-int migrate(struct cloudmig_ctx *ctx);
+int     retrieve_opts(int argc, char *argv[]);
+int     load_profiles(struct cloudmig_ctx *ctx);
+int     load_status(struct cloudmig_ctx *ctx);
+int     status_next_incomplete_entry(struct cloudmig_ctx *ctx,
+                                     struct file_transfer_state *filestate,
+                                     char **bucket);
+int     migrate(struct cloudmig_ctx *ctx);
 
+/*
+ * Used as load_status dependencies
+ *
+ * From create_status.c, retrieve_status.c and status.c
+ */
+char*   compute_status_bucket(struct cloudmig_ctx *ctx);
+int     create_status(struct cloudmig_ctx *ctx, dpl_vec_t *buckets);
+int     status_retrieve_states(struct cloudmig_ctx* ctx);
 #endif /* ! __CLOUDMIG_H__ */
