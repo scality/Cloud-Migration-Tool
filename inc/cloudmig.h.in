@@ -65,7 +65,8 @@ int     load_profiles(struct cloudmig_ctx *ctx);
 int     load_status(struct cloudmig_ctx *ctx);
 int     status_next_incomplete_entry(struct cloudmig_ctx *ctx,
                                      struct file_transfer_state *filestate,
-                                     char **bucket);
+                                     char **srcbucket,
+                                     char **dstbucket);
 int     migrate(struct cloudmig_ctx *ctx);
 
 /*

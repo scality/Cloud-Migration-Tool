@@ -92,6 +92,10 @@ struct file_transfer_state
 {
     struct file_state_entry fixed;  // fixed
     char                    *name;  // name of the file
+
+    // Data allowing to retrieve easily where does this entry come from
+    int                     state_idx;
+    unsigned int            offset;
 };
 
 
@@ -109,6 +113,7 @@ struct transfer_state
 {
     char                        *filename;      // name of the status file
     char                        *dest_bucket;   // name of the destination bckt
+    unsigned int                use_count;
     size_t                      size;           // size of the status file
     char                        *buf;           // file's content.
     unsigned int                next_entry_off; // index on the next entry

@@ -253,13 +253,15 @@ err:
  */
 int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
                                  struct file_transfer_state* filestate,
-                                 char** bucket)
+                                 char **srcbucket,
+                                 char **dstbucket)
 {
     assert(ctx != NULL);
     assert(ctx->status.bucket_name != NULL);
 
     int                     ret = EXIT_FAILURE;
     struct file_state_entry *fste;
+    bool                    found = false;
 
     /*
      * For each file in the status bucket, read it entry by entry
@@ -286,21 +288,29 @@ int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
              */
             if (ntohl(fste->offset) < ntohl(fste->size))
             {
+                found = true; // set the find flag
                 // First, fill the fste struct...
                 filestate->fixed.size = ntohl(fste->size);
                 filestate->fixed.offset = ntohl(fste->offset);
                 filestate->fixed.namlen = ntohl(fste->namlen);
+                // Next, save the data allowing to find back this entry
+                filestate->state_idx = i;
+                filestate->offset = bucket_state->next_entry_off;
+                // Copy the pointer of the dest bucket name
+                *dstbucket = bucket_state->dest_bucket;
                 // Use pointer arithmetics to get the name after the fste
-                filestate->name = strdup((char*)(fste+1));
+                filestate->name = calloc(filestate->fixed.namlen + 1,
+                                         sizeof(*filestate->name));
                 if (filestate->name == NULL)
                 {
                     PRINTERR("%s: could not allocate memory: %s",
                              __FUNCTION__, strerror(errno));
                     goto err;
                 }
+                strncpy(filestate->name, (char*)(fste+1), filestate->fixed.namlen);
 
                 // Second : Copy the bucket status file name and truncate it
-                if ((*bucket = strdup(bucket_state->filename)) == NULL)
+                if ((*srcbucket = strdup(bucket_state->filename)) == NULL)
                 {
                     PRINTERR("%s: could not allocate memory: %s",
                              __FUNCTION__, strerror(errno));
@@ -308,25 +318,37 @@ int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
                 }
                 // Cut the string at the ".cloudmig" part to get the bucket
                 // Here the filename is valid, so it should never crash :
-                *(strrchr(*bucket, '.')) = '\0';
+                *(strrchr(*srcbucket, '.')) = '\0';
 
-                bucket_state->next_entry_off += sizeof(*fste)
-                                                + filestate->fixed.namlen;
+                // For the threading :
+                // Reference counter over the use of the buffer, in order
+                // to avoid freeing it when the bucket is not fully transferred
+                bucket_state->use_count += 1;
                 break ;
             }
+            // If we do not break we need to advance in the file.
             bucket_state->next_entry_off += sizeof(*fste) + ntohl(fste->namlen);
         }
 
         if (bucket_state->next_entry_off < bucket_state->size)
+        {
+            // If we had increased it before, the condition may be invalid.
+            bucket_state->next_entry_off += sizeof(*fste) + ntohl(fste->namlen);
             break ;
+        }
 
-        free(ctx->status.bucket_states[i].buf);
-        ctx->status.bucket_states[i].buf = NULL;
+        // Free only if no transfer reference the buffer.
+        // Otherwise it will be done by the update status function
+        if (ctx->status.bucket_states[i].use_count == 0)
+        {
+            free(ctx->status.bucket_states[i].buf);
+            ctx->status.bucket_states[i].buf = NULL;
+        }
         ctx->status.cur_state = i; // update the current state file index.
     }
 
     ret = EXIT_SUCCESS;
-    if (ctx->status.cur_state == ctx->status.nb_states)
+    if (!found)
         ret = ENODATA;
 
     return ret;
@@ -340,10 +362,10 @@ err:
     filestate->fixed.size = 0;
     filestate->fixed.offset = 0;
     filestate->fixed.namlen = 0;
-    if (*bucket)
+    if (*srcbucket)
     {
-        free(*bucket);
-        *bucket = NULL;
+        free(*srcbucket);
+        *srcbucket = NULL;
     }
 
     return ret;

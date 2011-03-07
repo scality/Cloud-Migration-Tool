@@ -50,8 +50,9 @@ transfer_data_chunk(void* dst_hfile,
 // TODO FIXME : Do it with the correct attributes
 static int
 transfer_file(struct cloudmig_ctx* ctx,
-              char* bucket,
-              struct file_transfer_state* filestate)
+              struct file_transfer_state* filestate,
+              char* srcbucket,
+              char* dstbucket)
 {
     int                     ret = EXIT_FAILURE;
     dpl_status_t            dplret;
@@ -59,14 +60,15 @@ transfer_file(struct cloudmig_ctx* ctx,
     char*                   bucket_srcctx = ctx->src_ctx->cur_bucket;
     dpl_vfile_t             *dst_hfile;
 
-    cloudmig_log(DEBUG_LVL,
-                 "[Migrating] : file is a regular file. %s\n",
-                 "Starting transfer...");
+    cloudmig_log(INFO_LVL,
+"[Migrating] : file (len=%i)''%s'' is a regular file.\
+Starting transfer(buckets: %s -> %s)...\n",
+                filestate->fixed.namlen, filestate->name, srcbucket, dstbucket);
 
-    ctx->dest_ctx->cur_bucket = bucket;
-    ctx->src_ctx->cur_bucket = bucket;
+    ctx->dest_ctx->cur_bucket = dstbucket;
+    ctx->src_ctx->cur_bucket = srcbucket;
+
     
-
     /*
      * First, open the destination file for writing.
      */
@@ -81,7 +83,8 @@ transfer_file(struct cloudmig_ctx* ctx,
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not open dest file %s in bucket %s : %s\n",
-                 __FUNCTION__, filestate->name, bucket, dpl_status_str(dplret));
+                 __FUNCTION__, filestate->name, dstbucket,
+                 dpl_status_str(dplret));
         goto err;
     }
 
@@ -90,14 +93,15 @@ transfer_file(struct cloudmig_ctx* ctx,
      * that will transfer each data chunk.
      */
     dplret = dpl_openread(ctx->src_ctx, filestate->name,
-                          DPL_VFILE_FLAG_MD5 | DPL_VFILE_FLAG_ENCRYPT,
+                          DPL_VFILE_FLAG_MD5,
                           NULL, // condition
-                          transfer_data_chunk, dst_hfile,
+                          transfer_data_chunk, dst_hfile, // reading cb,data
                           NULL); // metadatap
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not open source file %s in bucket %s : %s\n",
-                 __FUNCTION__, filestate->name, bucket, dpl_status_str(dplret));
+                 __FUNCTION__, filestate->name, srcbucket,
+                 dpl_status_str(dplret));
         goto err;
     }
 
@@ -108,7 +112,8 @@ transfer_file(struct cloudmig_ctx* ctx,
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not close destination file %s in bucket %s : %s\n",
-                 __FUNCTION__, filestate->name, bucket, dpl_status_str(dplret));
+                 __FUNCTION__, filestate->name, dstbucket,
+                 dpl_status_str(dplret));
     }
 
     ret = EXIT_SUCCESS;
@@ -122,28 +127,35 @@ err:
 
 static int
 create_directory(struct cloudmig_ctx* ctx,
-                 char* bucket,
-                 struct file_transfer_state* filestate)
+                 struct file_transfer_state* filestate,
+                 char* srcbucket,
+                 char* dstbucket)
 { 
     int             ret = EXIT_FAILURE;
     dpl_status_t    dplret = DPL_SUCCESS;
-    char*           bck_ctx = ctx->dest_ctx->cur_bucket;
+    char*           bck_srcctx = ctx->src_ctx->cur_bucket;
+    char*           bck_dstctx = ctx->dest_ctx->cur_bucket;
+
 
     cloudmig_log(DEBUG_LVL,
                  "[Migrating] : file is a directory : creating it.\n");
-    ctx->dest_ctx->cur_bucket = bucket;
+
+    ctx->dest_ctx->cur_bucket = dstbucket;
+    ctx->src_ctx->cur_bucket  = srcbucket;
+
     dplret = dpl_mkdir(ctx->dest_ctx, filestate->name);
     // TODO FIXME With correct attributes
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not create destination dir '%s' in bucket %s\n",
-                 __FUNCTION__, filestate->name, bucket);
+                 __FUNCTION__, filestate->name, dstbucket);
         goto end;
     }
 
     ret = EXIT_SUCCESS;
 end:
-    ctx->dest_ctx->cur_bucket = bck_ctx;
+    ctx->dest_ctx->cur_bucket = bck_dstctx;
+    ctx->src_ctx->cur_bucket = bck_srcctx;
 
     return ret;
 }
@@ -170,24 +182,26 @@ static int
 migrate_loop(struct cloudmig_ctx* ctx)
 {
     int                         ret = EXIT_FAILURE;
-    struct file_transfer_state  cur_filestate;
-    char*                       bucket;
+    struct file_transfer_state  cur_filestate = {{0, 0, 0}, NULL, 0, 0};
+    char*                       srcbucket = NULL;
+    char*                       dstbucket = NULL;
     int                         failures;
 
     // The call allocates the buffer for the bucket, so we must free it
     // The same goes for the cur_filestate's name field.
-    while ((ret = status_next_incomplete_entry(ctx, &cur_filestate, &bucket))
+    while ((ret = status_next_incomplete_entry(ctx, &cur_filestate,
+                                               &srcbucket, &dstbucket))
            == EXIT_SUCCESS)
     {
         cloudmig_log(DEBUG_LVL,
-                "[Migrating] : starting migration of file %s from bucket %s.\n",
-                     cur_filestate.name, bucket);
+"[Migrating] : starting migration of file %s from bucket %s to bucket %s.\n",
+                     cur_filestate.name, srcbucket, dstbucket);
         failures = 0;
 retry:
         switch (get_migrating_file_type(&cur_filestate))
         {
         case DPL_FTYPE_DIR:
-            ret = create_directory(ctx, bucket, &cur_filestate);
+            ret = create_directory(ctx, &cur_filestate, srcbucket, dstbucket);
             if (ret != EXIT_SUCCESS)
             {
                 if (++failures < 3)
@@ -201,7 +215,7 @@ retry:
             }
             break ;
         case DPL_FTYPE_REG:
-            ret = transfer_file(ctx, bucket, &cur_filestate) ;
+            ret = transfer_file(ctx, &cur_filestate, srcbucket, dstbucket);
             if (ret != EXIT_SUCCESS)
             {
                 if (++failures < 3)
@@ -217,17 +231,18 @@ retry:
         //status_update_entry(ctx, bucket, &cur_filestate);
 
         cloudmig_log(INFO_LVL,
-                     "[Migrating] : file %s from bucket %s migrated.\n",
-                     cur_filestate.name, bucket);
-        free(bucket);
-        bucket = NULL;
+        "[Migrating] : file %s from bucket %s migrated to dest bucket %s.\n",
+                     cur_filestate.name, srcbucket, dstbucket);
+        free(srcbucket);
+        srcbucket = NULL;
+        dstbucket = NULL; // this one is not allocated for us (Copied pointer).
 
         free(cur_filestate.name);
         cur_filestate.name = NULL;
     }
 end:
-    if (bucket)
-        free(bucket);
+    if (srcbucket)
+        free(srcbucket);
     if (cur_filestate.name)
         free(cur_filestate.name);
 
