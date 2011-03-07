@@ -67,15 +67,13 @@ Starting transfer(buckets: %s -> %s)...\n",
 
     ctx->dest_ctx->cur_bucket = dstbucket;
     ctx->src_ctx->cur_bucket = srcbucket;
-
+    
     
     /*
      * First, open the destination file for writing.
      */
     dplret = dpl_openwrite(ctx->dest_ctx, filestate->name,
-                           DPL_VFILE_FLAG_CREAT
-                                | DPL_VFILE_FLAG_MD5
-                                | DPL_VFILE_FLAG_ENCRYPT,
+                           DPL_VFILE_FLAG_CREAT,
                            NULL, // metadata
                            DPL_CANNED_ACL_PRIVATE,
                            filestate->fixed.size,
