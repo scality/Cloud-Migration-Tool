@@ -385,6 +385,8 @@ int create_status(struct cloudmig_ctx* ctx, dpl_vec_t* buckets)
     char                    *status_filename = NULL;
     char                    *dest_bucket_name = NULL;
 
+    cloudmig_log(INFO_LVL, "[Creating Status]: beginning creating status...\n");
+
     // First, create the status bucket since it didn't exist.
     if ((ret = create_status_bucket(ctx)))
     {

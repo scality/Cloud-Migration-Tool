@@ -38,6 +38,9 @@ static dpl_status_t
 transfer_data_chunk(void* dst_hfile,
                     char *buf, unsigned int len)
 {
+    cloudmig_log(DEBUG_LVL,
+    "[Migrating]: vFile %p : Transfering data chunk of %u bytes.\n",
+    dst_hfile, len);
     return dpl_write((dpl_vfile_t*)dst_hfile, buf, len);
 }
 
