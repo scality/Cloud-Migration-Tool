@@ -55,10 +55,12 @@ static int status_retrieve_associated_buckets(struct cloudmig_ctx* ctx,
 {
     int                         ret = EXIT_FAILURE;
     dpl_status_t                dplret;
-    dpl_dict_t                  *metadata;
+    dpl_dict_t                  *metadata = NULL;
     struct migration_status     status = {NULL, fsize, 0};
     struct cldmig_state_entry   *entry = NULL;
 
+    cloudmig_log(INFO_LVL,
+                 "[Loading Status]: Retrieving src/dest buckets associations...\n");
     status.buf = calloc(fsize, sizeof(*status.buf));
     if (status.buf == NULL)
     {
@@ -86,9 +88,13 @@ static int status_retrieve_associated_buckets(struct cloudmig_ctx* ctx,
      */
 
     for (entry = (void*)status.buf;
-            (long int)entry < (long int)(status.buf + status.size);
-                entry += ntohl(entry->file) + ntohl(entry->bucket)) // lens
+         (long int)entry < (long int)(status.buf + status.size);
+         entry = (void*)((char*)(entry) + sizeof(*entry)
+                         + ntohl(entry->file) + ntohl(entry->bucket)))
     {
+        cloudmig_log(DEBUG_LVL,
+                     "[Loading Status]: searching match for status file %.*s.\n",
+                     ntohl(entry->file), (char*)(entry+1));
         // Match the current entry with the right bucket_state.
         for (int i=0; i < ctx->status.nb_states; ++i)
         {
@@ -99,12 +105,22 @@ static int status_retrieve_associated_buckets(struct cloudmig_ctx* ctx,
             {
                 // go over the filename to copy the destination bucket name
                 ctx->status.bucket_states[i].dest_bucket =
-                    strdup((char*)entry + ntohl(entry->file));
-                break ;
+                    calloc(entry->file, sizeof(char));
+                if (ctx->status.bucket_states[i].dest_bucket == NULL)
+                {
+                    PRINTERR("%s: Could not allocate memory while"
+                             " loading status...\n",
+                             __FUNCTION__,0);
+                    goto end;
+                }
+                strncpy(ctx->status.bucket_states[i].dest_bucket,
+                        (char*)entry + sizeof(*entry) + ntohl(entry->file),
+                        ntohl(entry->bucket));
                 cloudmig_log(DEBUG_LVL,
                 "[Loading Status]: matched status file %s to dest bucket %s.\n",
                 ctx->status.bucket_states[i].filename,
                 ctx->status.bucket_states[i].dest_bucket);
+                break ;
             }
         }
     }
@@ -131,6 +147,9 @@ int status_retrieve_states(struct cloudmig_ctx* ctx)
     dpl_vec_t               *objects;
     size_t                  migstatus_size = 0;
 
+    ctx->src_ctx->cur_bucket = ctx->status.bucket_name;
+
+    cloudmig_log(INFO_LVL, "[Loading Status]: Retrieving status...\n");
     // Retrieve the list of files for the buckets states
     dplret = dpl_list_bucket(ctx->src_ctx, ctx->status.bucket_name,
                              NULL, NULL, &objects, NULL);
@@ -207,6 +226,8 @@ err:
 
     if (objects != NULL)
         dpl_vec_objects_free(objects);
+
+    ctx->src_ctx->cur_bucket = NULL;
 
     return ret;
 }
