@@ -171,80 +171,6 @@ end:
 
 
 /*
- * Callback function for dpl_openread (needs a callback for each chunk
- * of data received)
- *
- * It appends each chunk of data to the buf of the transfer_state
- */
-static dpl_status_t status_append_buffer_to_bucket_state(void* ctx,
-                                                         char* buf,
-                                                         unsigned int len)
-{
-    struct transfer_state* state = ctx;
-    dpl_status_t    ret = DPL_FAILURE;
-
-    int newlen = state->next_entry_off + len;
-    state->buf = realloc(state->buf, newlen);
-    if (state->buf == NULL)
-    {
-        ret = DPL_ENOMEM;
-        goto err;
-    }
-    memmove(state->buf + state->next_entry_off, buf, len);
-    state->next_entry_off += len;
-
-    ret = DPL_SUCCESS;
-
-err:
-    
-    return ret;
-}
-
-/*
- * Maps a bucket state's file into memory using dpl_openread.
- */
-static int status_map_bucket_state(struct cloudmig_ctx* ctx,
-                                   struct transfer_state* bucket_state)
-{
-    dpl_status_t        dplret;
-    int                 ret = EXIT_FAILURE;
-    dpl_dict_t          *metadata;
-    char*               ctx_bucket = ctx->src_ctx->cur_bucket;
-
-    /*
-     * This function uses the bucket_state as private data for the callback.
-     *
-     * It uses the field next_entry_off to set the quantity of data received
-     * so it needs to be reset to 0 afterwards.
-     */
-    ctx->src_ctx->cur_bucket = ctx->status.bucket_name;
-    dplret = dpl_openread(ctx->src_ctx, bucket_state->filename,
-                          DPL_VFILE_FLAG_MD5, NULL,
-                          &status_append_buffer_to_bucket_state, bucket_state,
-                          &metadata);
-    if (dplret != DPL_SUCCESS)
-    {
-        PRINTERR("%s: Could not map bucket status file %s : %s\n",
-                 __FUNCTION__, bucket_state->filename, dpl_status_str(dplret));
-        goto err;
-    }
-
-    ret = EXIT_SUCCESS;
-
-err:
-    // Restore original bucket.
-    ctx->src_ctx->cur_bucket = ctx_bucket;
-
-    bucket_state->next_entry_off = 0;
-
-    if (metadata != NULL)
-        dpl_dict_free(metadata);
-
-    return ret;
-}
-
-
-/*
  * The function allocates and retrieves the content of a bucket state file
  * if it is to be read.
  * It also frees the content of the bucket state files it already went over.
@@ -274,7 +200,7 @@ int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
     {
         struct transfer_state*  bucket_state = &(ctx->status.bucket_states[i]);
         if (bucket_state->buf == NULL
-            && status_map_bucket_state(ctx, bucket_state) == EXIT_FAILURE)
+            && cloudmig_map_bucket_state(ctx, bucket_state) == EXIT_FAILURE)
             goto err;
         // loop on the bucket state for each entry, until the end.
         while (bucket_state->next_entry_off < bucket_state->size)

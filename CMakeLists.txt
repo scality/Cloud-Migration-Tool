@@ -76,6 +76,8 @@ SET(CLOUDMIG_SRC    src/main.c
                     src/status.c
                     src/create_status.c
                     src/retrieve_status.c
+                    src/utils.c
+                    src/delete_files.c
 )
 
 ADD_EXECUTABLE(cloudmig ${CLOUDMIG_SRC})

@@ -81,4 +81,11 @@ int     migrate(struct cloudmig_ctx *ctx);
 char*   compute_status_bucket(struct cloudmig_ctx *ctx);
 int     create_status(struct cloudmig_ctx *ctx, dpl_vec_t *buckets);
 int     status_retrieve_states(struct cloudmig_ctx* ctx);
+
+/*
+ * Utils used in different source files
+ */
+int     cloudmig_map_bucket_state(struct cloudmig_ctx* ctx,
+                                  struct transfer_state* bucket_state);
+void    delete_source(struct cloudmig_ctx *ctx);
 #endif /* ! __CLOUDMIG_H__ */

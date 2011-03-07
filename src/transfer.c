@@ -277,7 +277,7 @@ migrate(struct cloudmig_ctx* ctx)
         cloudmig_log(DEBUG_LVL, "Migration finished with success !\n");
         // TODO FIXME XXX
         // Then we have to remove the data from the source
-        cloudmig_log(WARN_LVL, "Deletion of source files not implemented !\n");
+        delete_source(ctx);
     }
     else
     {
