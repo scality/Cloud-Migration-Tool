@@ -228,7 +228,8 @@ retry:
         default:
             break ;
         }
-        //status_update_entry(ctx, bucket, &cur_filestate);
+        status_update_entry(ctx, &cur_filestate,
+                            srcbucket, cur_filestate.fixed.size);
 
         cloudmig_log(INFO_LVL,
         "[Migrating] : file %s from bucket %s migrated to dest bucket %s.\n",

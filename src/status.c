@@ -370,3 +370,61 @@ err:
 
     return ret;
 }
+
+int		status_update_entry(struct cloudmig_ctx *ctx,
+                            struct file_transfer_state *fst,
+                            char *bucket,
+                            int32_t done_offset)
+{
+    int             ret = EXIT_FAILURE;
+    dpl_status_t    dplret;
+    char            *buf;
+    dpl_vfile_t     *hfile;
+    char            *ctx_bck = ctx->src_ctx->cur_bucket;
+    ctx->src_ctx->cur_bucket = ctx->status.bucket_name;
+
+    cloudmig_log(INFO_LVL,
+"[Updating status]: File %s from bucket %s done up to offset %li.\n",
+                 fst->name, bucket, done_offset);
+    
+    buf = ctx->status.bucket_states[fst->state_idx].buf;
+    if (buf == NULL)
+    {
+        PRINTERR("%s: Called for a freed bucket_state !\n", __FUNCTION__);
+        goto end;
+    }
+
+    ((struct file_state_entry*)(buf + fst->offset))->offset = htonl(done_offset);
+
+    dplret = dpl_openwrite(ctx->src_ctx,
+                           ctx->status.bucket_states[fst->state_idx].filename,
+                           DPL_VFILE_FLAG_MD5,
+                           NULL, // metadata
+                           DPL_CANNED_ACL_PRIVATE,
+                           ctx->status.bucket_states[fst->state_idx].size,
+                           &hfile);
+    if (dplret != DPL_SUCCESS)
+    {
+        PRINTERR("%s: Could not open status file %s for updating.\n",
+                 __FUNCTION__);
+        goto end;
+    }
+
+    dplret = dpl_write(hfile, buf, ctx->status.bucket_states[fst->state_idx].size);
+    if (dplret != DPL_SUCCESS)
+    {
+        PRINTERR("%s: Could not write buffer to status file %s for updating.\n",
+                 __FUNCTION__);
+        goto end;
+    }
+
+    cloudmig_log(DEBUG_LVL,
+"[Updating status]: File %s from bucket %s done up to offset %li updated.\n",
+                 fst->name, ctx->status.bucket_name, done_offset);
+
+end:
+    if (hfile)
+        dpl_close(hfile);
+    ctx->src_ctx->cur_bucket = ctx_bck;
+    return ret; 
+}
