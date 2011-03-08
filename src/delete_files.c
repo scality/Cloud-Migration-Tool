@@ -31,6 +31,22 @@
 
 #include "cloudmig.h"
 
+static void delete_file(struct cloudmig_ctx *ctx, char *bucket, char *filename)
+{
+    dpl_status_t dplret;
+
+    cloudmig_log(DEBUG_LVL, "[Deleting Source]\t Deleting file '%s'...\n",
+                 (*cur_object)->key);
+
+    dplret = dpl_delete(ctx->src_ctx, bucket, filename, NULL);
+    if (dplret != DPL_SUCCESS)
+    {
+        PRINTERR("%s: Could not delete the file %s" " from the bucket %s : %s",
+                 __FUNCTION__, filename, bucket, dpl_status_str(dplret));
+    }
+}
+
+
 static void delete_status_bucket(struct cloudmig_ctx *ctx)
 {
     dpl_status_t    dplret;
@@ -47,24 +63,9 @@ static void delete_status_bucket(struct cloudmig_ctx *ctx)
         goto deletebucket;
     }
 
-    cloudmig_log(DEBUG_LVL, "[Deleting Source] Deleting from bucket %s:\n",
-                 ctx->status.bucket_name);
     dpl_object_t** cur_object = (dpl_object_t**)objects->array;
     for (int i = 0; i < objects->n_items; ++i, ++cur_object)
-    {
-        cloudmig_log(DEBUG_LVL, "[Deleting Source]\tfile : %s.\n",
-                     (*cur_object)->key);
-        dplret = dpl_delete(ctx->src_ctx,
-                            ctx->status.bucket_name,
-                            (*cur_object)->key,
-                            NULL);
-        if (dplret != DPL_SUCCESS)
-        {
-            PRINTERR("%s: Could not delete file %s from bucket %s : %s.\n",
-                     __FUNCTION__, (*cur_object)->key, ctx->status.bucket_name,
-                     dpl_status_str(dplret));
-        }
-    }
+        delete_file(ctx, ctx->status.bucket_name, (*cur_object)->key);
 
 deletebucket:
     dpl_deletebucket(ctx->src_ctx, ctx->status.bucket_name);
@@ -76,19 +77,6 @@ deletebucket:
     }
     cloudmig_log(DEBUG_LVL, "[Deleting Source] Bucket %s deleted.\n",
                  ctx->status.bucket_name);
-}
-
-
-static void delete_file(struct cloudmig_ctx *ctx, char *bucket, char *filename)
-{
-    dpl_status_t dplret;
-
-    dplret = dpl_delete(ctx->src_ctx, bucket, filename, NULL);
-    if (dplret != DPL_SUCCESS)
-    {
-        PRINTERR("%s: Could not delete the file %s" " from the bucket %s : %s",
-                 __FUNCTION__, filename, bucket, dpl_status_str(dplret));
-    }
 }
 
 
