@@ -100,6 +100,8 @@ int load_status(struct cloudmig_ctx* ctx)
     int             resuming = 0; // differentiate resuming and starting mig'
     dpl_vec_t       *src_buckets = NULL;
 
+    cloudmig_log(INFO_LVL, "[Loading Status]: Starting status loading...\n");
+
     // First, make sure we have a status bucket defined.
     if (ctx->status.bucket_name == NULL)
         ctx->status.bucket_name = compute_status_bucket(ctx);
@@ -150,6 +152,8 @@ int load_status(struct cloudmig_ctx* ctx)
     if (status_retrieve_states(ctx))
         goto err;
 
+    cloudmig_log(INFO_LVL, "[Loading Status]: Status loading"
+                 " done with success.\n");
     goto end;
 
 
@@ -189,6 +193,8 @@ int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
     struct file_state_entry *fste;
     bool                    found = false;
 
+    cloudmig_log(DEBUG_LVL,
+                 "[Migrating]: Starting next incomplete entry search...\n");
     /*
      * For each file in the status bucket, read it entry by entry
      * and stop when coming across an incomplete (/not migrated) entry.
@@ -246,22 +252,27 @@ int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
                 // Here the filename is valid, so it should never crash :
                 *(strrchr(*srcbucket, '.')) = '\0';
 
+                cloudmig_log(DEBUG_LVL,
+                "[Migrating]: Found an incompletely transfered file :"
+                " '%s' from bucket '%s' to bucket '%s'...\n",
+                filestate->name, *srcbucket, *dstbucket);
+
                 // For the threading :
                 // Reference counter over the use of the buffer, in order
                 // to avoid freeing it when the bucket is not fully transferred
                 bucket_state->use_count += 1;
+
+                // Advance for the next search
+                bucket_state->next_entry_off +=
+                    sizeof(*fste) + ntohl(fste->namlen);
                 break ;
             }
             // If we do not break we need to advance in the file.
             bucket_state->next_entry_off += sizeof(*fste) + ntohl(fste->namlen);
         }
 
-        if (bucket_state->next_entry_off < bucket_state->size)
-        {
-            // If we had increased it before, the condition may be invalid.
-            bucket_state->next_entry_off += sizeof(*fste) + ntohl(fste->namlen);
+        if (found == true)
             break ;
-        }
 
         // Free only if no transfer reference the buffer.
         // Otherwise it will be done by the update status function
@@ -275,7 +286,11 @@ int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
 
     ret = EXIT_SUCCESS;
     if (!found)
+    {
+        cloudmig_log(DEBUG_LVL,
+                     "[Migrating]: No more file to start transfering.\n");
         ret = ENODATA;
+    }
 
     return ret;
 
@@ -310,8 +325,8 @@ int		status_update_entry(struct cloudmig_ctx *ctx,
     ctx->src_ctx->cur_bucket = ctx->status.bucket_name;
 
     cloudmig_log(INFO_LVL,
-"[Updating status]: File %s from bucket %s done up to offset %li.\n",
-                 fst->name, bucket, done_offset);
+"[Updating status]: File %s from bucket %s done up to %li/%li bytes.\n",
+                 fst->name, bucket, done_offset, fst->fixed.size);
     
     buf = ctx->status.bucket_states[fst->state_idx].buf;
     if (buf == NULL)
@@ -345,7 +360,7 @@ int		status_update_entry(struct cloudmig_ctx *ctx,
     }
 
     cloudmig_log(DEBUG_LVL,
-"[Updating status]: File %s from bucket %s done up to offset %li updated.\n",
+                 "[Updating status]: File %s from bucket %s updated.\n",
                  fst->name, ctx->status.bucket_name, done_offset);
 
 end:

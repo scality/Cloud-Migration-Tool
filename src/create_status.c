@@ -39,6 +39,8 @@ static int create_status_bucket(struct cloudmig_ctx* ctx)
 
     dpl_status_t    ret;
 
+    cloudmig_log(DEBUG_LVL, "[Creating Status]: Creating status bucket...\n");
+
     ret = dpl_make_bucket(ctx->src_ctx, ctx->status.bucket_name,
                           DPL_LOCATION_CONSTRAINT_US_STANDARD,
                           DPL_CANNED_ACL_PRIVATE);
@@ -83,6 +85,10 @@ static int create_status_file(struct cloudmig_ctx* ctx,
     // Data for each entry of the bucket status file
     struct file_state_entry entry;
     char            *entry_filename = NULL;
+
+    cloudmig_log(DEBUG_LVL,
+                 "[Creating Status]: Creating status file for bucket '%s'...\n",
+                 bucket->name);
 
     if ((dplret = dpl_list_bucket(ctx->src_ctx, bucket->name,
                                   NULL, NULL, &objects, NULL)) != DPL_SUCCESS)
@@ -229,6 +235,11 @@ static int create_destination_bucket(struct cloudmig_ctx *ctx,
     bool            retried = false;
     dpl_status_t    dplret;
 
+    cloudmig_log(DEBUG_LVL,
+                 "[Creating Status]: Creating destination bucket"
+                 " matching status bucket file '%s'...\n",
+                 fname);
+
     *bname = strdup(fname);
     if (*bname == NULL)
     {
@@ -317,6 +328,10 @@ static int create_cloudmig_status(struct cloudmig_ctx *ctx,
     char            *buf = NULL;
     char            *curdata;
 
+    cloudmig_log(DEBUG_LVL,
+                 "[Creating Status]: Creating cloudmig general status file...\n"
+                 );
+
     // First calc the final file's size
     for (struct cldmig_entry *it=list; it != NULL; it = it->next)
     {
@@ -385,7 +400,8 @@ int create_status(struct cloudmig_ctx* ctx, dpl_vec_t* buckets)
     char                    *status_filename = NULL;
     char                    *dest_bucket_name = NULL;
 
-    cloudmig_log(INFO_LVL, "[Creating Status]: beginning creating status...\n");
+    cloudmig_log(INFO_LVL,
+                 "[Creating Status]: Beginning creation of status...\n");
 
     // First, create the status bucket since it didn't exist.
     if ((ret = create_status_bucket(ctx)))

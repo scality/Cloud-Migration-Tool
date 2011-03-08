@@ -37,6 +37,8 @@ int load_profiles(struct cloudmig_ctx* ctx)
     char* profile_dir = 0;
     char* profile_name = 0;
 
+    cloudmig_log(INFO_LVL, "[Loading Profiles]: Starting profiles loading...\n");
+
     /*
      * First, load the source profile...
      */
@@ -81,6 +83,9 @@ int load_profiles(struct cloudmig_ctx* ctx)
      */
     if (gl_options->flags & DEBUG)
     {
+        cloudmig_log(DEBUG_LVL,
+        "[Loading Profiles]: Activating droplet libary traces.\n");
+
         ctx->src_ctx->trace_level =   DPL_TRACE_CONN | DPL_TRACE_IO
                                     | DPL_TRACE_HTTP | DPL_TRACE_SSL
                                     | DPL_TRACE_REQ  | DPL_TRACE_CONV
@@ -92,6 +97,9 @@ int load_profiles(struct cloudmig_ctx* ctx)
                                     | DPL_TRACE_VDIR | DPL_TRACE_VFILE
                                     | DPL_TRACE_BUF  ;
     }
+
+    cloudmig_log(INFO_LVL,
+    "[Loading Profiles]: Profiles loaded with success.\n");
 
     return (EXIT_SUCCESS);
 }

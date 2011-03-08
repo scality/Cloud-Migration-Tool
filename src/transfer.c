@@ -64,9 +64,8 @@ transfer_file(struct cloudmig_ctx* ctx,
     dpl_vfile_t             *dst_hfile;
 
     cloudmig_log(INFO_LVL,
-"[Migrating] : file (len=%i)''%s'' is a regular file.\
-Starting transfer(buckets: %s -> %s)...\n",
-                filestate->fixed.namlen, filestate->name, srcbucket, dstbucket);
+"[Migrating] : file (len=%i)''%s'' is a regular file : starting transfer...\n",
+                filestate->fixed.namlen, filestate->name);
 
     ctx->dest_ctx->cur_bucket = dstbucket;
     ctx->src_ctx->cur_bucket = srcbucket;
@@ -119,6 +118,9 @@ Starting transfer(buckets: %s -> %s)...\n",
 
     ret = EXIT_SUCCESS;
 
+    cloudmig_log(INFO_LVL, "[Migrating] File '%s' transfered successfully !\n",
+                 filestate->name);
+
 err:
     ctx->dest_ctx->cur_bucket = bucket_dstctx;
     ctx->src_ctx->cur_bucket = bucket_srcctx;
@@ -138,8 +140,9 @@ create_directory(struct cloudmig_ctx* ctx,
     char*           bck_dstctx = ctx->dest_ctx->cur_bucket;
 
 
-    cloudmig_log(DEBUG_LVL,
-                 "[Migrating] : file is a directory : creating it.\n");
+    cloudmig_log(INFO_LVL,
+                 "[Migrating] : file '%s' is a directory : creating...\n",
+                 filestate->name);
 
     ctx->dest_ctx->cur_bucket = dstbucket;
     ctx->src_ctx->cur_bucket  = srcbucket;
@@ -154,6 +157,11 @@ create_directory(struct cloudmig_ctx* ctx,
     }
 
     ret = EXIT_SUCCESS;
+
+    cloudmig_log(INFO_LVL,
+                 "[Migrating] : directory '%s' successfully created !\n",
+                 filestate->name);
+
 end:
     ctx->dest_ctx->cur_bucket = bck_dstctx;
     ctx->src_ctx->cur_bucket = bck_srcctx;
@@ -242,6 +250,7 @@ retry:
         free(cur_filestate.name);
         cur_filestate.name = NULL;
     }
+
 end:
     if (srcbucket)
         free(srcbucket);
@@ -281,7 +290,8 @@ migrate(struct cloudmig_ctx* ctx)
     }
     else
     {
-        PRINTERR("An error occured during the migration.\n", 0);
+        PRINTERR("An error occured during the migration."
+                 " At least one file could not be transfered\n", 0);
         goto err;
     }
 

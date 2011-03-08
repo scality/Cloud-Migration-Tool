@@ -60,7 +60,9 @@ static int status_retrieve_associated_buckets(struct cloudmig_ctx* ctx,
     struct cldmig_state_entry   *entry = NULL;
 
     cloudmig_log(INFO_LVL,
-                 "[Loading Status]: Retrieving src/dest buckets associations...\n");
+                 "[Loading Status]: Retrieving source/destination"
+                 " buckets associations...\n");
+
     status.buf = calloc(fsize, sizeof(*status.buf));
     if (status.buf == NULL)
     {
@@ -126,6 +128,9 @@ static int status_retrieve_associated_buckets(struct cloudmig_ctx* ctx,
     }
 
     ret = EXIT_SUCCESS;
+    cloudmig_log(INFO_LVL,
+                 "[Loading Status]: Source/Destination"
+                 " buckets associations done.\n");
 
 end:
     if (status.buf)
@@ -150,6 +155,7 @@ int status_retrieve_states(struct cloudmig_ctx* ctx)
     ctx->src_ctx->cur_bucket = ctx->status.bucket_name;
 
     cloudmig_log(INFO_LVL, "[Loading Status]: Retrieving status...\n");
+
     // Retrieve the list of files for the buckets states
     dplret = dpl_list_bucket(ctx->src_ctx, ctx->status.bucket_name,
                              NULL, NULL, &objects, NULL);
@@ -211,6 +217,8 @@ int status_retrieve_states(struct cloudmig_ctx* ctx)
     }
 
     ret = EXIT_SUCCESS;
+
+    cloudmig_log(INFO_LVL, "[Loading Status]: Status data retrieved.\n");
 
 err:
     if (ret == EXIT_FAILURE && ctx->status.bucket_states != NULL)
