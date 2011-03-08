@@ -25,40 +25,105 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 digraph C{
-subgraph clusterCloudMig {
-    bgcolor = white
-    label = cloudmig
-    main -> arg_parser
-    main -> load_profiles
-    main -> load_status
-        load_status -> get_status_file
-            get_status_file -> create_status_file
-                create_status_file -> list_vdir
-                    list_vdir -> dpl_opendir
-                    list_vdir -> dpl_readdir
-                    list_vdir -> dpl_eof
-                    list_vdir -> dpl_closedir
-                    list_vdir -> status_add_file 
-    main -> transfer_bucket
-        transfer_bucket -> set_state_from_status
-        transfer_bucket -> transfer_file
-            transfer_file -> get_part_from_bucket
-                get_part_from_bucket -> dpl_get_range
-            transfer_file -> put_part_to_bucket
-                put_part_to_bucket -> dpl_put_range
-            transfer_file -> update_status
-                update_status -> dpl_put_range
-        transfer_bucket -> get_next_file_from_status
-    subgraph clusterdpl {
+    subgraph clusterCloudMig {
         bgcolor = white
-        label = droplet_library
-        dpl_opendir
-        dpl_readdir
-        dpl_eof
-        dpl_closedir
-        dpl_get_range
-        dpl_put_range
-    }
+        label = cloudmig
+        subgraph clusterdpl {
+            bgcolor = white
+            label = "droplet_library"
+            dpl_ctx_new
+            dpl_make_bucket
+            dpl_openread
+            dpl_openwrite
+            dpl_close
+            dpl_list_all_my_buckets
+            dpl_list_bucket
+            dpl_delete
+            dpl_deletebucket
+        }
+        subgraph clusterMainFile {
+            label = "main.c"
+            main
+        }
+        subgraph clusterOptionsFile {
+            label = "options.c"
+            main -> retrieve_opts
+                retrieve_opts -> cloudmig_options_check
+            cloudmig_options_check
+        }
+        subgraph clusterLoadProfileFile {
+            label = "load_profile.c"
+            main -> load_profiles
+                load_profiles -> dpl_ctx_new
+        }
+        subgraph clusterStatusFile {
+            label = "status.c"
+            main -> load_status
+                load_status -> compute_status_bucket
+                load_status -> dpl_list_all_my_buckets
+                load_status -> create_status
+                load_status -> status_retrieve_states
+            compute_status_bucket
+        }
+        subgraph clusterCreateStatusFile {
+            label = "create_status.c"
+            create_status -> create_status_bucket
+                create_status_bucket -> dpl_make_bucket
+            create_status -> create_status_file
+                create_status_file -> dpl_list_bucket
+                create_status_file -> calc_status_file_size
+                create_status_file -> dpl_openwrite
+                create_status_file -> dpl_write
+                create_status_file -> dpl_close
+            create_status -> create_destination_bucket
+                create_destination_bucket -> dpl_make_bucket
+            create_status -> append_to_stlist
+            create_status -> create_cloudmig_status
+                create_cloudmig_status -> dpl_openwrite
+                create_cloudmig_status -> dpl_write
+                create_cloudmig_status -> dpl_close
+            append_to_stlist
+        }
+        subgraph clusterRetrieveStatusFile {
+            label = "retrieve_status.c"
+            status_retrieve_states -> dpl_list_bucket
+            status_retrieve_states -> status_retrieve_associated_buckets
+                status_retrieve_associated_buckets -> dpl_openread
+            migst_cb
+        }
+        subgraph clusterTransferFile {
+            label = "transfer.c"
+            main -> migrate
+                migrate -> migrate_loop
+                    migrate_loop -> status_next_incomplete_entry
+                    migrate_loop -> get_migrating_file_type
+                        get_migrating_file_type
+                    migrate_loop -> transfer_file
+                        transfer_file -> dpl_openwrite
+                        transfer_file -> dpl_openread
+                        transfer_file -> dpl_close
+                    migrate_loop -> create_directory
+                        create_directory -> dpl_mkdir
+                    migrate_loop -> status_update_entry
+                migrate -> delete_source
+            transfer_data_chunk -> dpl_write
+        }
+        subgraph clusterDeleteFilesFile {
+            label = "delete_files.c"
+            delete_source -> delete_source_bucket
+                delete_source_bucket -> cloudmig_map_bucket_state
+                delete_source_bucket -> delete_file
+                delete_source_bucket -> dpl_deletebucket
+            delete_source -> delete_status_bucket
+                delete_status_bucket -> dpl_list_bucket
+                delete_status_bucket -> dpl_delete
+                delete_status_bucket -> dpl_deletebucket
 
-}
+        }
+        subgraph clusterUtilsFile {
+            label = "utils.c"
+            cloudmig_map_bucket_state
+            cloudmig_append_buffer_to_bucket_state
+        }
+    }
 }
