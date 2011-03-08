@@ -198,6 +198,7 @@ migrate_loop(struct cloudmig_ctx* ctx)
 
     // The call allocates the buffer for the bucket, so we must free it
     // The same goes for the cur_filestate's name field.
+try_next_file:
     while ((ret = status_next_incomplete_entry(ctx, &cur_filestate,
                                                &srcbucket, &dstbucket))
            == EXIT_SUCCESS)
@@ -220,7 +221,7 @@ retry:
                     cur_filestate.name);
                     goto retry;
                 }
-                goto end;
+                goto try_next_file;
             }
             break ;
         case DPL_FTYPE_REG:
@@ -231,7 +232,7 @@ retry:
                 {
                     goto retry;
                 }
-                goto end;
+                goto try_next_file;
             }
             break ;
         default:
