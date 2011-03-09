@@ -38,32 +38,25 @@ void cloudmig_log(enum cloudmig_loglevel lvl, const char* format, ...)
     if (lvl >= gl_loglevel)
     {
         va_list args;
-        char*   fmt = 0;
-        // 20 for "cloudmig :" + log_level string length.
-        if ((fmt = calloc(20 + strlen(format) + 1, sizeof(*fmt))) == 0)
-        {
-            PRINTERR("%s: could not allocate memory.\n", __FUNCTION__);
-            return ;
-        }
-        strcpy(fmt, "cloudmig: ");
+        char*   loglvl_str = 0;
+
         switch (lvl)
         {
         case DEBUG_LVL:
-            strcat(fmt, "[DEBUG]");
+            loglvl_str = "DEBUG";
             break ;
         case INFO_LVL:
-            strcat(fmt, "[INFO]");
+            loglvl_str = "INFO";
             break ;
         case WARN_LVL:
-            strcat(fmt, "[WARN]");
+            loglvl_str = "WARN";
             break ;
         default:
             break ;
         }
-        strcat(fmt, format);
+        printf("cloudmig: [%s]", loglvl_str);
         va_start(args, format);
-        vprintf(fmt, args);
+        vprintf(format, args);
         va_end(args);
-        free(fmt);
     }
 }
