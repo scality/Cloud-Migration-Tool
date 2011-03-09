@@ -36,7 +36,7 @@ static void delete_file(struct cloudmig_ctx *ctx, char *bucket, char *filename)
     dpl_status_t dplret;
 
     cloudmig_log(DEBUG_LVL, "[Deleting Source]\t Deleting file '%s'...\n",
-                 (*cur_object)->key);
+                 filename);
 
     dplret = dpl_delete(ctx->src_ctx, bucket, filename, NULL);
     if (dplret != DPL_SUCCESS)

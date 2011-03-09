@@ -72,6 +72,7 @@ int		status_update_entry(struct cloudmig_ctx *ctx,
                             char *bucket,
                             int32_t offset);
 int     migrate(struct cloudmig_ctx *ctx);
+void    delete_source(struct cloudmig_ctx *ctx);
 
 /*
  * Used as load_status dependencies
@@ -87,5 +88,5 @@ int     status_retrieve_states(struct cloudmig_ctx* ctx);
  */
 int     cloudmig_map_bucket_state(struct cloudmig_ctx* ctx,
                                   struct transfer_state* bucket_state);
-void    delete_source(struct cloudmig_ctx *ctx);
+
 #endif /* ! __CLOUDMIG_H__ */

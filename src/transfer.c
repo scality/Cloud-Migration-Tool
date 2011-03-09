@@ -252,7 +252,6 @@ retry:
         cur_filestate.name = NULL;
     }
 
-end:
     if (srcbucket)
         free(srcbucket);
     if (cur_filestate.name)
