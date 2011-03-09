@@ -95,33 +95,31 @@ static int status_retrieve_associated_buckets(struct cloudmig_ctx* ctx,
                          + ntohl(entry->file) + ntohl(entry->bucket)))
     {
         cloudmig_log(DEBUG_LVL,
-                     "[Loading Status]: searching match for status file %.*s.\n",
-                     ntohl(entry->file), (char*)(entry+1));
+            "[Loading Status]: searching match for status file %.*s.\n",
+            ntohl(entry->file), (char*)(entry+1));
+
         // Match the current entry with the right bucket_state.
         for (int i=0; i < ctx->status.nb_states; ++i)
         {
             // Is it the right one ?
-            if (!strncmp((char*)(entry+1),
-                         ctx->status.bucket_states[i].filename,
-                         ntohl(entry->file)))
+            if (!strcmp((char*)(entry+1),
+                        ctx->status.bucket_states[i].filename))
             {
-                // go over the filename to copy the destination bucket name
+                // copy the destination bucket name
                 ctx->status.bucket_states[i].dest_bucket =
-                    calloc(entry->file, sizeof(char));
+                    strdup((char*)entry + sizeof(*entry) + ntohl(entry->file));
                 if (ctx->status.bucket_states[i].dest_bucket == NULL)
                 {
                     PRINTERR("%s: Could not allocate memory while"
-                             " loading status...\n",
-                             __FUNCTION__,0);
+                             " loading status...\n", __FUNCTION__);
                     goto end;
                 }
-                strncpy(ctx->status.bucket_states[i].dest_bucket,
-                        (char*)entry + sizeof(*entry) + ntohl(entry->file),
-                        ntohl(entry->bucket));
+
                 cloudmig_log(DEBUG_LVL,
                 "[Loading Status]: matched status file %s to dest bucket %s.\n",
-                ctx->status.bucket_states[i].filename,
-                ctx->status.bucket_states[i].dest_bucket);
+                    ctx->status.bucket_states[i].filename,
+                    ctx->status.bucket_states[i].dest_bucket);
+
                 break ;
             }
         }
@@ -129,8 +127,8 @@ static int status_retrieve_associated_buckets(struct cloudmig_ctx* ctx,
 
     ret = EXIT_SUCCESS;
     cloudmig_log(INFO_LVL,
-                 "[Loading Status]: Source/Destination"
-                 " buckets associations done.\n");
+        "[Loading Status]: Source/Destination"
+        " buckets associations done.\n");
 
 end:
     if (status.buf)

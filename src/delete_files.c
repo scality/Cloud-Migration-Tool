@@ -105,16 +105,8 @@ static void delete_source_bucket(struct cloudmig_ctx *ctx,
     // loop on the bucket state for each entry, to delete the files.
     while (bucket_state->next_entry_off < bucket_state->size)
     {
-        // Most of this code would disappear with better binary file format
         fste = (void*)(bucket_state->buf + bucket_state->next_entry_off);
-        char *filename = (char*)(fste+1);
-        char *afterlast = filename + ntohl(fste->namlen);
-        char save = *afterlast;
-
-        *afterlast = '\0'; // Make sure there is a terminating '\0'
-        delete_file(ctx, bucket_state->filename, filename);
-        *afterlast = save; // restore the original data
-
+        delete_file(ctx, bucket_state->filename, (char*)(fste+1));
         // Next entry...
         bucket_state->next_entry_off += sizeof(*fste) + ntohl(fste->namlen);
     }

@@ -231,15 +231,14 @@ int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
                 // Copy the pointer of the dest bucket name
                 *dstbucket = bucket_state->dest_bucket;
                 // Use pointer arithmetics to get the name after the fste
-                filestate->name = calloc(filestate->fixed.namlen + 1,
-                                         sizeof(*filestate->name));
+                filestate->name = strdup((char*)(fste+1));
                 if (filestate->name == NULL)
                 {
-                    PRINTERR("%s: could not allocate memory: %s",
+                    PRINTERR("%s: could not copy file name : %s",
                              __FUNCTION__, strerror(errno));
                     goto err;
                 }
-                strncpy(filestate->name, (char*)(fste+1), filestate->fixed.namlen);
+                
 
                 // Second : Copy the bucket status file name and truncate it
                 if ((*srcbucket = strdup(bucket_state->filename)) == NULL)
