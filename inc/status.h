@@ -30,10 +30,12 @@
 
 /*
  * This macro rounds a number to superior 4
- * ex: 16 -> 16
+ * ex: 15 -> 16
+ *     16 -> 20
  *     17 -> 20
+ * This allows to get a len mod 4 with at least one '\0' caracter,
  */
-#define ROUND_NAMLEN(namlen) ((namlen) + (4 - (namlen) % 4) % 4)
+#define ROUND_NAMLEN(namlen) ((namlen) + (4 - (namlen) % 4))
 
 
 
