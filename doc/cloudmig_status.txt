@@ -25,43 +25,46 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 ##
 
-This document describes the transfer status file format in a detailed manner.
+This document describes the file format of the general migration status in a
+detailed manner.
 
-A transfer status file for a bucket (or “.cloudmig file”) describes the transfer
-status of one and only one bucket. The name of the file matches the bucket's
-name.
+As of now, this format does not contain a header, but one could be added
+in the future in order to maintain a sort of general informations on the
+migration.
 
-This file format is quite simple since it's only goal is to help maintaining an
-updated status of the account's migration.
-
-Thus, the file is a concatenation of files status, which are binary data
-directly written into the file. For compatibility purposes, the data must be
-written in big endian byte-order (thus following the network byte-order).
+The current format is a concatenation of names associations. A name association
+contains two integers representing the length of two following strings that are
+a bucket status filename and the associated destination bucket name.
 
 Here is a table describing the binary format of one entry (each integer being
                                                            written in big
                                                            endian byte-order):
 
 -------------------------------------------------------------------------------
-| integer (4 bytes) : length of the file's name. (rounded to a superior       |
-|                     multiple of 4 with the following formula :              |
+| integer (4 bytes) : length of the bucket status file's name, rounded to a   |
+|                     superior multiple of 4 with the following formula :     |
 |                     X + (4 - X % 4))                                        |
 |-----------------------------------------------------------------------------|
-| integer (4 bytes) : whole file size.                                        |
-|-----------------------------------------------------------------------------|
-| integer (4 bytes) : Current writing offset (used in case of interruption in |
-|                                             order to resume the migration)  |
+| integer (4 bytes) : length of the destination bucket's name, rounded to a   |
+|                     superior multiple of 4 with the following formula :     |
+|                     X + (4 - X % 4))                                        |
 |-----------------------------------------------------------------------------|
 | Data : filename data padded in order to reach the length of the first       |
 |        integer rounded to the superior 4 multiple. The padding should be    |
 |        a filling of terminating nul caracters.                              |
 |                                                                             |
 |                                                                             |
+|-----------------------------------------------------------------------------|
+| Data : bucket name data padded in order to reach the length of the second   |
+|        integer rounded to the superior 4 multiple. The padding should be    |
+|        a filling of terminating nul caracters.                              |
+|                                                                             |
 |                                                                             |
 -------------------------------------------------------------------------------
 
 
-Those files will be contained in a bucket created for this sole purpose on the
+
+This file will be contained in a bucket created for this sole purpose on the
 source's storage space. Since a migration should be seen as an atomic action,
 the user should never try to migrate a source account to two different
 destination accounts, thus avoiding status bucket conflicts (the name of the
