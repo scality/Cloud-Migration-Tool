@@ -66,6 +66,33 @@ static size_t calc_status_file_size(dpl_object_t** objs, int n_items)
     return size;
 }
 
+static int fill_entry_from_object(struct file_state_entry* entry,
+                                  char** filename,
+                                  dpl_object_t *obj)
+{
+    int len = strlen(obj->key);
+
+    entry->namlen = ROUND_NAMLEN(len);
+    entry->size = obj->size;
+    entry->offset = 0;
+    *filename = calloc(entry->namlen, sizeof(**filename));
+    if (*filename == NULL)
+    {
+        PRINTERR("%s: Could not allocate file state entry->: %s\n",
+                 __FUNCTION__, strerror(errno));
+        return EXIT_FAILURE;
+    }
+    // already padded with zeroes, copy only the string
+    memcpy(*filename, obj->key, len);
+
+    // translate each integer into network byte order for sending...
+    entry->namlen = htonl(entry->namlen);
+    entry->size = htonl(entry->size);
+    entry->offset = htonl(entry->offset);
+
+    return EXIT_SUCCESS;
+}
+
 static int create_status_file(struct cloudmig_ctx* ctx,
                               dpl_bucket_t* bucket,
                               char **filename)
@@ -74,13 +101,12 @@ static int create_status_file(struct cloudmig_ctx* ctx,
     assert(ctx->src_ctx != NULL);
     assert(bucket != NULL);
 
-    int             ret = EXIT_SUCCESS;
+    int             ret = EXIT_FAILURE;
     dpl_status_t    dplret = DPL_SUCCESS;
     dpl_vec_t*      objects = NULL;
     dpl_vfile_t*    bucket_status = NULL;
     char            *ctx_bucket;
     // Data for the bucket status file
-    int             namlen;
     size_t          filesize;
     // Data for each entry of the bucket status file
     struct file_state_entry entry;
@@ -95,29 +121,25 @@ static int create_status_file(struct cloudmig_ctx* ctx,
     {
         PRINTERR("%s: Could not list bucket %s : %s\n", __FUNCTION__,
                  bucket->name, dpl_status_str(dplret));
-        ret = EXIT_FAILURE;
         goto end;
     }
 
 
-    namlen = strlen(bucket->name) + 10;
-    *filename = malloc(namlen * sizeof(**filename));
+    *filename = cloudmig_get_status_filename_from_bucket(bucket->name);
     if (*filename == NULL)
     {
         PRINTERR("%s: Could not save bucket '%s' status : %s\n",
                  __FUNCTION__, bucket->name, strerror(errno));
-        ret = EXIT_FAILURE;
         goto end;
     }
-    strcpy(*filename, bucket->name);
-    strcat(*filename, ".cloudmig");
+
     cloudmig_log(DEBUG_LVL, "[Creating status] Filename for bucket %s : %s\n",
                  bucket->name, *filename);
-
 
     // Save the bucket and set the cloudmig_status bucket as current.
     ctx_bucket = ctx->src_ctx->cur_bucket;
     ctx->src_ctx->cur_bucket = ctx->status.bucket_name;
+
     filesize = calc_status_file_size((dpl_object_t**)(objects->array),
                                      objects->n_items);
     if ((dplret = dpl_openwrite(ctx->src_ctx, *filename, DPL_VFILE_FLAG_CREAT,
@@ -126,7 +148,6 @@ static int create_status_file(struct cloudmig_ctx* ctx,
     {
         PRINTERR("%s: Could not create bucket %s's status file : %s\n",
                  __FUNCTION__, bucket->name, dpl_status_str(dplret));
-        ret = EXIT_FAILURE;
         goto end;
     }
 
@@ -141,43 +162,31 @@ static int create_status_file(struct cloudmig_ctx* ctx,
     {
         cloudmig_log(DEBUG_LVL, "[Creating status] \t file : '%s'(%i bytes)\n",
                      (*cur_object)->key, (*cur_object)->size);
-        int len = strlen((*cur_object)->key);
-        entry.namlen = ROUND_NAMLEN(len);
-        entry.size = (*cur_object)->size;
-        entry.offset = 0;
-        entry_filename = calloc(entry.namlen, sizeof(*entry_filename));
-        if (entry_filename == NULL)
-        {
-            PRINTERR("%s: Could not allocate file state entry : %s\n",
-                     __FUNCTION__, strerror(errno));
-            ret = EXIT_FAILURE;
+        // Prepare data for writing...
+        if (fill_entry_from_object(&entry, &entry_filename,
+                                   *cur_object) != EXIT_SUCCESS)
             goto end;
-        }
-        // already padded with zeroes, copy only the string
-        memcpy(entry_filename, (*cur_object)->key, len);
-        // translate each integer into network byte order
-        entry.namlen = htonl(entry.namlen);
-        entry.size = htonl(entry.size);
-        entry.offset = htonl(entry.offset);
+
+        // Write data to network file
         dplret = dpl_write(bucket_status, (char*)(&entry), sizeof(entry));
         if (dplret != DPL_SUCCESS)
         {
             PRINTERR("%s: Could not send file entry: %s\n",
                      __FUNCTION__, dpl_status_str(dplret));
-            ret = EXIT_FAILURE;
             goto end;
         }
-        dplret = dpl_write(bucket_status, entry_filename, ROUND_NAMLEN(len));
+        dplret = dpl_write(bucket_status, entry_filename, ntohl(entry.namlen));
         if (dplret != DPL_SUCCESS)
         {
             PRINTERR("%s: Could not send file entry: %s\n",
                      __FUNCTION__, dpl_status_str(dplret));
-            ret = EXIT_FAILURE;
             goto end;
         }
     }
     cloudmig_log(DEBUG_LVL, "[Creating status] Bucket %s: SUCCESS.\n",
                  bucket->name);
+
+    ret = EXIT_SUCCESS;
 
     // Now that's done, free the memory allocated by the libdroplet
     // And restore the source ctx's cur_bucket
@@ -194,6 +203,8 @@ end:
     ctx->src_ctx->cur_bucket = ctx_bucket;
     return ret;
 }
+
+
 /* Create a new list elem to write to the general status file afterwards */
 static int append_to_stlist(struct cldmig_entry **list,
                             char **fname, char **bname)
@@ -227,6 +238,8 @@ static int append_to_stlist(struct cldmig_entry **list,
     new_st = 0;
     return EXIT_SUCCESS;
 }
+
+
 static int create_destination_bucket(struct cloudmig_ctx *ctx,
                                      char *fname,
                                      char **bname)
@@ -282,12 +295,13 @@ retry_mb_with_patched_name:
                                     DPL_LOCATION_CONSTRAINT_US_STANDARD,
                                     DPL_CANNED_ACL_PRIVATE) == DPL_SUCCESS)
                 {
-                    PRINTERR("%s: Dummy request did not fail...???\n",
+                    PRINTERR("[WORKAROUND]: %s: Dummy request didn't fail???\n",
                              __FUNCTION__);
                 }
                 else
                 {
-                    PRINTERR("%s: Dummy Request failed as expected...\n",
+                    PRINTERR("[WORKAROUND]: %s: Dummy Request"
+                             " failed as expected...\n",
                              __FUNCTION__);
                 }
             }

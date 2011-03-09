@@ -88,5 +88,6 @@ int     status_retrieve_states(struct cloudmig_ctx* ctx);
  */
 int     cloudmig_map_bucket_state(struct cloudmig_ctx* ctx,
                                   struct transfer_state* bucket_state);
+char*   cloudmig_get_status_filename_from_bucket(char *bucket);
 
 #endif /* ! __CLOUDMIG_H__ */

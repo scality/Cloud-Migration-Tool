@@ -104,3 +104,26 @@ err:
     return ret;
 }
 
+
+/*
+ * This function allocates and fills a string with the status filename
+ * matching the bucket given as parameter.
+ */
+char* cloudmig_get_status_filename_from_bucket(char* bucket)
+{
+    int     len = 0;
+    char    *filename = NULL;
+
+    len = strlen(bucket) + 10;
+    filename = malloc(len * sizeof(*filename));
+    if (filename == NULL)
+    {
+        PRINTERR("%s: Could not allocate memory"
+                 " for status filename for bucket '%s'.\n",
+                 __FUNCTION__, bucket);
+        return NULL;
+    }
+    strcpy(filename, bucket);
+    strcat(filename, ".cloudmig");
+    return filename;
+}
