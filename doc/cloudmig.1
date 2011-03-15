@@ -1,0 +1,148 @@
+.\" Copyright (c) 2011, David Pineau
+.\" All rights reserved.
+.\"
+.\" Redistribution and use in source and binary forms, with or without
+.\" modification, are permitted provided that the following conditions are met:
+.\"  * Redistributions of source code must retain the above copyright
+.\"    notice, this list of conditions and the following disclaimer.
+.\"  * Redistributions in binary form must reproduce the above copyright
+.\"    notice, this list of conditions and the following disclaimer in the
+.\"    documentation and/or other materials provided with the distribution.
+.\"  * Neither the name of the copyright holder nor the names of its contributors
+.\"    may be used to endorse or promote products derived from this software
+.\"    without specific prior written permission.
+.\"
+.\" THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+.\" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+.\" IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+.\" ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER AND CONTRIBUTORS BE
+.\" LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+.\" CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+.\" SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+.\" INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+.\" CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+.\" ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+.\" POSSIBILITY OF SUCH DAMAGE.
+.\"
+
+.TH CLOUDMIG 1 "March 15, 2011" "BSD 3-clause Licence" "BSD General Commands Manual"
+
+.SH NAME
+
+.P
+.B
+cloudmig
+- cloud storage migration tool
+
+
+.SH SYNOPSIS
+
+.P
+.B
+cloudmig
+{
+.I
+src_profile_name
+| 
+.B
+-s
+.I
+src_profile
+}
+{
+.I
+dst_profile_name
+| 
+.B
+-s
+.I
+dst_profile
+}
+[
+.B
+-iqv
+]
+
+
+.SH DESCRIPTION
+
+.P
+cloudmig migrates the content of a cloud storage account to another. It uses
+the Scality Droplet Library to abstract the APIs of the service that hosts the
+data. Thus, the supported services depend on the services supported by the
+library.
+
+.P
+The source's profile name and destination's profile name are the names of the
+droplet profiles located in the default droplet directory, as described by the
+droplet library documentation.
+
+.P
+The program first connects to the source account, and creates a status bucket
+to be filled with files describing the migration status of each bucket. This
+status is updated regularly throughout the migration. If the migration is
+stopped in any way (crash, manual stop, ...), this status will be used at the
+next attempt to migrate the data. While creating the status files, it creates
+the destination buckets where the files will be transfered.
+
+
+.SH OPTIONS
+
+.B
+-s
+.I
+src_profile
+.RS
+Gives the path of the source profile to the program instead of using the
+default droplet directory with a profile name.
+.RE
+ 
+.B
+-d
+.I
+dst_profile
+.RS
+Gives the path of the destination profile to the program instead of using the
+default droplet directory with a profile name.
+.RE
+ 
+.B
+-i
+.RS
+If there is a status bucket on the source profile, it is ignored and may
+probably be overwritten. This allows restarting a migration.
+.RE
+ 
+.B
+-q
+.RS
+Quiet mode. Deactivates the user display.
+.RE
+ 
+.B
+-v
+.RS
+Verbose/Debug mode for cloudmig.
+.RE
+
+
+.SH AUTHOR
+
+Written by David Pineau.
+
+
+.SH REPORTING BUGS AND COMMENTS
+
+.P
+Please report any bug you encounter with this tool on the
+project's github tracker :
+
+http://github.com/Joacchim/Scality-Cloud-Migration-Tool/issues .
+
+.P
+If you have any suggestion for this tool, please report them on the same page. For positive or negative comments, contact the author through github.
+
+.SH KNOWN BUGS
+None at the moment.
+
+
