@@ -26,6 +26,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <endian.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -56,8 +57,8 @@ static int status_retrieve_associated_buckets(struct cloudmig_ctx* ctx,
     int                         ret = EXIT_FAILURE;
     dpl_status_t                dplret;
     dpl_dict_t                  *metadata = NULL;
-    struct migration_status     status = {NULL, fsize, 0};
     struct cldmig_state_entry   *entry = NULL;
+    struct migration_status     status = {NULL, fsize, 0};
 
     cloudmig_log(INFO_LVL,
                  "[Loading Status]: Retrieving source/destination"
@@ -70,6 +71,8 @@ static int status_retrieve_associated_buckets(struct cloudmig_ctx* ctx,
                  __FUNCTION__);
         goto end;
     }
+    ctx->status.general.size = fsize;
+    ctx->status.general.buf = status.buf;
 
     dplret = dpl_openread(ctx->src_ctx, ".cloudmig",
                           DPL_VFILE_FLAG_MD5,
@@ -88,8 +91,17 @@ static int status_retrieve_associated_buckets(struct cloudmig_ctx* ctx,
      * Let's read it and associate bucket status files with
      * the destination buckets.
      */
-
-    for (entry = (void*)status.buf;
+    // Switch from big endian 64 to host endian
+    ctx->status.general.head.total_sz =
+        be64toh(((struct cldmig_state_header*)status.buf)->total_sz);
+    ctx->status.general.head.done_sz =
+        be64toh(((struct cldmig_state_header*)status.buf)->done_sz);
+    ctx->status.general.head.nb_objects =
+        be64toh(((struct cldmig_state_header*)status.buf)->nb_objects);
+    ctx->status.general.head.done_objects =
+        be64toh(((struct cldmig_state_header*)status.buf)->done_objects);
+    // Now map the matching buckets
+    for (entry = (void*)status.buf + sizeof(struct cldmig_state_header);
          (long int)entry < (long int)(status.buf + status.size);
          entry = (void*)((char*)(entry) + sizeof(*entry)
                          + ntohl(entry->file) + ntohl(entry->bucket)))
@@ -129,6 +141,8 @@ static int status_retrieve_associated_buckets(struct cloudmig_ctx* ctx,
     cloudmig_log(INFO_LVL,
         "[Loading Status]: Source/Destination"
         " buckets associations done.\n");
+
+    status.buf = 0;
 
 end:
     if (status.buf)

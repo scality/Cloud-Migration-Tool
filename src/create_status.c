@@ -158,14 +158,17 @@ static int create_status_file(struct cloudmig_ctx* ctx,
     cloudmig_log(DEBUG_LVL,
                  "[Creating status] Bucket %s (%i objects) in file '%s':\n",
                  bucket->name, objects->n_items, *filename);
+    ctx->status.general.head.nb_objects += objects->n_items;
     for (int i = 0; i < objects->n_items; ++i, ++cur_object)
     {
         cloudmig_log(DEBUG_LVL, "[Creating status] \t file : '%s'(%i bytes)\n",
                      (*cur_object)->key, (*cur_object)->size);
+
         // Prepare data for writing...
         if (fill_entry_from_object(&entry, &entry_filename,
                                    *cur_object) != EXIT_SUCCESS)
             goto end;
+        ctx->status.general.head.total_sz += (*cur_object)->size;
 
         // Write data to network file
         dplret = dpl_write(bucket_status, (char*)(&entry), sizeof(entry));
@@ -346,7 +349,8 @@ static int create_cloudmig_status(struct cloudmig_ctx *ctx,
                  "[Creating Status]: Creating cloudmig general status file...\n"
                  );
 
-    // First calc the final file's size
+    // First calc the final file's size (header + each chunk)
+    size = sizeof(ctx->status.general.head);
     for (struct cldmig_entry *it=list; it != NULL; it = it->next)
     {
         size += sizeof(it->namlens);
@@ -373,7 +377,14 @@ static int create_cloudmig_status(struct cloudmig_ctx *ctx,
                  __FUNCTION__, strerror(errno));
         goto end;
     }
-    curdata = buf;
+    // first copy the header into it after setting network byte order.
+    ctx->status.general.head.total_sz =
+        htobe64(ctx->status.general.head.total_sz);
+    ctx->status.general.head.nb_objects =
+        htobe64(ctx->status.general.head.nb_objects);
+    memcpy(buf, &ctx->status.general.head, sizeof(ctx->status.general.head));
+    // Next is the data
+    curdata = buf + sizeof(ctx->status.general.head);
     for (struct cldmig_entry *it=list; it != NULL; it = it->next)
     {
         it->namlens.file = htonl(it->namlens.file);

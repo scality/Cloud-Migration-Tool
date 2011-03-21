@@ -30,18 +30,23 @@
 
 #include "cloudmig.h"
 
+struct data_transfer
+{
+    dpl_vfile_t             *hfile;
+    struct cloudmig_ctx     *ctx;
+};
+
 /*
  * This callback receives the data read from a source,
  * and writes it into the destination file.
  */
 static dpl_status_t
-transfer_data_chunk(void* dst_hfile,
-                    char *buf, unsigned int len)
+transfer_data_chunk(void* data, char *buf, unsigned int len)
 {
     cloudmig_log(DEBUG_LVL,
     "[Migrating]: vFile %p : Transfering data chunk of %u bytes.\n",
-    dst_hfile, len);
-    return dpl_write((dpl_vfile_t*)dst_hfile, buf, len);
+    ((struct data_transfer*)data)->hfile, len);
+    return dpl_write(((struct data_transfer*)data)->hfile, buf, len);
 }
 
 /*
@@ -61,7 +66,7 @@ transfer_file(struct cloudmig_ctx* ctx,
     dpl_status_t            dplret;
     char*                   bucket_dstctx = ctx->dest_ctx->cur_bucket;
     char*                   bucket_srcctx = ctx->src_ctx->cur_bucket;
-    dpl_vfile_t             *dst_hfile;
+    struct data_transfer    cb_data = { .hfile=NULL, .ctx=ctx };
 
     cloudmig_log(INFO_LVL,
 "[Migrating] : file (len=%i)''%s'' is a regular file : starting transfer...\n",
@@ -79,7 +84,7 @@ transfer_file(struct cloudmig_ctx* ctx,
                            NULL, // metadata
                            DPL_CANNED_ACL_PRIVATE,
                            filestate->fixed.size,
-                           &dst_hfile);
+                           &cb_data.hfile);
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not open dest file %s in bucket %s : %s\n",
@@ -95,7 +100,7 @@ transfer_file(struct cloudmig_ctx* ctx,
     dplret = dpl_openread(ctx->src_ctx, filestate->name,
                           DPL_VFILE_FLAG_MD5,
                           NULL, // condition
-                          transfer_data_chunk, dst_hfile, // reading cb,data
+                          transfer_data_chunk, &cb_data, // reading cb,data
                           NULL); // metadatap
     if (dplret != DPL_SUCCESS)
     {
@@ -105,10 +110,8 @@ transfer_file(struct cloudmig_ctx* ctx,
         goto err;
     }
 
-    /*
-     * And finally, close the destination file written...
-     */
-    dplret = dpl_close(dst_hfile);
+    /* And finally, close the destination file written... */
+    dplret = dpl_close(cb_data.hfile);
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not close destination file %s in bucket %s : %s\n",
@@ -117,6 +120,16 @@ transfer_file(struct cloudmig_ctx* ctx,
     }
 
     ret = EXIT_SUCCESS;
+
+    /* 
+     * Now update the transfered size in the general status
+     * We can only do this here since in a multi-threaded context, we would
+     * not be able to ensure the transfered size is rolled-back before a status
+     * update in case of failure
+     */
+    // TODO Lock general status
+    ctx->status.general.head.done_sz += filestate->fixed.size;
+    // TODO Unlock general status
 
     cloudmig_log(INFO_LVL, "[Migrating] File '%s' transfered successfully !\n",
                  filestate->name);

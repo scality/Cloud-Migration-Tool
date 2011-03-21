@@ -49,7 +49,10 @@
 // Unused yet...
 struct cldmig_state_header
 {
-    uint32_t    nobjects;
+    uint64_t    total_sz; // Can count up to ULLONG_MAX bytes.
+    uint64_t    done_sz;
+    uint64_t    nb_objects;
+    uint64_t    done_objects;
 };
 
 struct cldmig_state_entry
@@ -66,6 +69,12 @@ struct cldmig_entry
     struct cldmig_entry         *next;
 };
 
+struct cldmig_status
+{
+    struct cldmig_state_header  head;
+    size_t                      size;
+    char                        *buf;
+};
 
 /***********************************************************************\
 *                                                                       *
@@ -126,6 +135,7 @@ struct transfer_state
  */
 struct cloudmig_status
 {
+    struct cldmig_status    general;            // general cloudmig status
     char                    *bucket_name;       // name of the status bucket
     int                     nb_states;          // number of bucket states
     int                     cur_state;          // index of the current state

@@ -328,22 +328,23 @@ int		status_update_entry(struct cloudmig_ctx *ctx,
 {
     int             ret = EXIT_FAILURE;
     dpl_status_t    dplret;
-    char            *buf;
-    dpl_vfile_t     *hfile;
+    dpl_vfile_t     *hfile = NULL;
+    dpl_vfile_t     *hfile_genst = NULL;
     char            *ctx_bck = ctx->src_ctx->cur_bucket;
     ctx->src_ctx->cur_bucket = ctx->status.bucket_name;
+    struct transfer_state   *bst = &ctx->status.bucket_states[fst->state_idx];
 
     cloudmig_log(INFO_LVL,
 "[Updating status]: File %s from bucket %s done up to %li/%li bytes.\n",
                  fst->name, bucket, done_offset, fst->fixed.size);
     
-    buf = ctx->status.bucket_states[fst->state_idx].buf;
-    if (buf == NULL)
+    if (bst->buf == NULL)
     {
         PRINTERR("%s: Called for a freed bucket_state !\n", __FUNCTION__);
         goto end;
     }
 
+    // TODO Lock bst
     /*
      * Since the directories have a size of 0, we have to
      * store the transfered file's size +1, in order to identify
@@ -351,13 +352,14 @@ int		status_update_entry(struct cloudmig_ctx *ctx,
      */
     ((struct file_state_entry*)(bst->buf + fst->offset))->offset =
         htonl(done_offset + 1);
+    // TODO Unlock bst
 
     dplret = dpl_openwrite(ctx->src_ctx,
-                           ctx->status.bucket_states[fst->state_idx].filename,
+                           bst->filename,
                            DPL_VFILE_FLAG_MD5,
                            NULL, // metadata
                            DPL_CANNED_ACL_PRIVATE,
-                           ctx->status.bucket_states[fst->state_idx].size,
+                           bst->size,
                            &hfile);
     if (dplret != DPL_SUCCESS)
     {
@@ -366,21 +368,68 @@ int		status_update_entry(struct cloudmig_ctx *ctx,
         goto end;
     }
 
-    dplret = dpl_write(hfile, buf, ctx->status.bucket_states[fst->state_idx].size);
+    dplret = dpl_write(hfile, bst->buf, bst->size);
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not write buffer to status file %s for updating.\n",
                  __FUNCTION__);
         goto end;
     }
+    dpl_close(hfile);
+    hfile = NULL;
 
     cloudmig_log(DEBUG_LVL,
                  "[Updating status]: File %s from bucket %s updated.\n",
-                 fst->name, ctx->status.bucket_name, done_offset);
+                 fst->name, ctx->status.bucket_name);
+
+    // TODO Lock bst
+    bst->use_count -= 1;
+    if (bst->use_count == 0)
+    {
+        free(bst->buf);
+        bst->buf = NULL;
+    }
+    // TODO Unlock bst
+
+    /*
+     * If the file is fully transfered : update the object nb, not the size. 
+     * It should have already been done in the transfer callback
+     * */
+    // TODO Lock general status
+    if (done_offset == fst->fixed.size)
+        ctx->status.general.head.done_objects += 1;
+    ((struct cldmig_state_header*)ctx->status.general.buf)->done_sz =
+        htobe64(ctx->status.general.head.done_sz);
+    ((struct cldmig_state_header*)ctx->status.general.buf)->done_objects =
+        htobe64(ctx->status.general.head.done_objects);
+    dplret = dpl_openwrite(ctx->src_ctx,
+                           ".cloudmig",
+                           DPL_VFILE_FLAG_MD5,
+                           NULL,
+                           DPL_CANNED_ACL_PRIVATE,
+                           ctx->status.general.size,
+                           &hfile_genst);
+    if (dplret != DPL_SUCCESS)
+    {
+        PRINTERR("%s: Could not open general status file for update.\n",
+                 __FUNCTION__);
+        goto end;
+    }
+
+    dplret = dpl_write(hfile_genst,
+                       ctx->status.general.buf, ctx->status.general.size);
+    if (dplret != DPL_SUCCESS)
+    {
+        PRINTERR("%s: Could not update general status file.\n", __FUNCTION__);
+        goto end;
+    }
+    // TODO Unlock general status
 
 end:
     if (hfile)
         dpl_close(hfile);
+    if (hfile_genst)
+        dpl_close(hfile_genst);
     ctx->src_ctx->cur_bucket = ctx_bck;
     return ret; 
 }
