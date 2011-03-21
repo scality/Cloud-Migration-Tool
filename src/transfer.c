@@ -147,16 +147,25 @@ create_directory(struct cloudmig_ctx* ctx,
     ctx->dest_ctx->cur_bucket = dstbucket;
     ctx->src_ctx->cur_bucket  = srcbucket;
 
+    /* 
+     * FIXME : WORKAROUND : replace the last slash by a nul char
+     * Since the dpl_mkdir function seems to fail when the last char is a slash
+     */
+    filestate->name[strlen(filestate->name) - 1] = 0;
     dplret = dpl_mkdir(ctx->dest_ctx, filestate->name);
+    filestate->name[strlen(filestate->name)] = '/';
     // TODO FIXME With correct attributes
     if (dplret != DPL_SUCCESS)
     {
-        PRINTERR("%s: Could not create destination dir '%s' in bucket %s\n",
-                 __FUNCTION__, filestate->name, dstbucket);
+        PRINTERR("%s: Could not create destination dir '%s' in bucket %s: %s\n",
+                 __FUNCTION__, filestate->name, dstbucket,
+                 dpl_status_str(dplret));
         goto end;
     }
 
     ret = EXIT_SUCCESS;
+
+    /* No general status size to update, since directories are empty files */
 
     cloudmig_log(INFO_LVL,
                  "[Migrating] : directory '%s' successfully created !\n",
@@ -216,7 +225,7 @@ retry:
             {
                 if (++failures < 3)
                 {
-                    cloudmig_log(DEBUG_LVL,
+                    cloudmig_log(ERR_LVL,
                     "[Migrating] : failure, retrying migration of file %s.\n",
                     cur_filestate.name);
                     goto retry;
@@ -230,16 +239,23 @@ retry:
             {
                 if (++failures < 3)
                 {
+                    cloudmig_log(ERR_LVL,
+                    "[Migrating] : failure, retrying migration of file %s.\n",
+                    cur_filestate.name);
                     goto retry;
                 }
                 goto try_next_file;
             }
             break ;
         default:
+            PRINTERR("%s: File %s has no type attributed ? not transfered...\n",
+                     __FUNCTION__, cur_filestate.name);
             break ;
         }
-        status_update_entry(ctx, &cur_filestate,
-                            srcbucket, cur_filestate.fixed.size);
+        /* Only update status if transfer suceeded */
+        if (failures < 3)
+            status_update_entry(ctx, &cur_filestate,
+                                srcbucket, cur_filestate.fixed.size);
 
         cloudmig_log(INFO_LVL,
         "[Migrating] : file %s from bucket %s migrated to dest bucket %s.\n",

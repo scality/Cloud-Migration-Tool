@@ -217,8 +217,13 @@ int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
              *
              * Here we have to permanently use ntohl over fste's values,
              * since the int32_t are stored in network byte order.
+             *
+             * Moreover, since the directories have a size of 0, we have to
+             * store the transfered file's size +1, in order to identify
+             * finished transfers and unfinished ones. Thus, the comparison to
+             * know whether a file is transfered or not is offset <= size.
              */
-            if (ntohl(fste->offset) < ntohl(fste->size))
+            if (ntohl(fste->offset) <= ntohl(fste->size))
             {
                 found = true; // set the find flag
                 // First, fill the fste struct...
@@ -311,6 +316,11 @@ err:
     return ret;
 }
 
+/*
+ * Function called when a file has been transfered successfully.
+ * It updates the status of the matching bucket as well as the general
+ * status.
+ */
 int		status_update_entry(struct cloudmig_ctx *ctx,
                             struct file_transfer_state *fst,
                             char *bucket,
@@ -334,7 +344,13 @@ int		status_update_entry(struct cloudmig_ctx *ctx,
         goto end;
     }
 
-    ((struct file_state_entry*)(buf + fst->offset))->offset = htonl(done_offset);
+    /*
+     * Since the directories have a size of 0, we have to
+     * store the transfered file's size +1, in order to identify
+     * finished transfers and unfinished ones.
+     */
+    ((struct file_state_entry*)(bst->buf + fst->offset))->offset =
+        htonl(done_offset + 1);
 
     dplret = dpl_openwrite(ctx->src_ctx,
                            ctx->status.bucket_states[fst->state_idx].filename,
