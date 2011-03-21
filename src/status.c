@@ -205,9 +205,14 @@ int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
     for (int i = ctx->status.cur_state; i < ctx->status.nb_states; ++i)
     {
         struct transfer_state*  bucket_state = &(ctx->status.bucket_states[i]);
+        // TODO Lock bucket_state
         if (bucket_state->buf == NULL
             && cloudmig_map_bucket_state(ctx, bucket_state) == EXIT_FAILURE)
             goto err;
+        // Increase the count to prevent it being freed after each file.
+        // To be freed where no more file to transfer from it too.
+        bucket_state->use_count += 1;
+
         // loop on the bucket state for each entry, until the end.
         while (bucket_state->next_entry_off < bucket_state->size)
         {
@@ -276,15 +281,20 @@ int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
         }
 
         if (found == true)
+        {
+            // TODO Unlock bucket_state (locked at loop's start)
             break ;
+        }
 
         // Free only if no transfer reference the buffer.
         // Otherwise it will be done by the update status function
-        if (ctx->status.bucket_states[i].use_count == 0)
+        bucket_state->use_count -= 1;
+        if (bucket_state->use_count == 0)
         {
-            free(ctx->status.bucket_states[i].buf);
-            ctx->status.bucket_states[i].buf = NULL;
+            free(bucket_state->buf);
+            bucket_state->buf = NULL;
         }
+        // TODO Unlock bucket_state (locked at loop's start)
         ctx->status.cur_state = i; // update the current state file index.
     }
 
