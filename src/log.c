@@ -51,6 +51,9 @@ void cloudmig_log(enum cloudmig_loglevel lvl, const char* format, ...)
         case WARN_LVL:
             loglvl_str = "WARN";
             break ;
+        case ERR_LVL:
+            loglvl_str = "ERR";
+            break ;
         default:
             break ;
         }
