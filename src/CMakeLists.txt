@@ -25,45 +25,13 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 
 
-CMAKE_MINIMUM_REQUIRED(VERSION 2.6)
-PROJECT(CLOUDMIG C)
+# For the main program : the migration tool
+ADD_SUBDIRECTORY(cldmig)
 
-SET(CLOUDMIG_VERSION_MAJOR 0)
-SET(CLOUDMIG_VERSION_MINOR 8)
-
-# Change the module path in order to include own's
-SET(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CLOUDMIG_SOURCE_DIR}/CMakeScripts)
-
-# Find the (own) Dot package in order to build png files from dot files (doc).
-FIND_PACKAGE(Dot)
-
-# Find the (own) Droplet package in order to build the project.
-FIND_PACKAGE(Droplet REQUIRED)
-FIND_PACKAGE(LibXml2 REQUIRED)
-FIND_PACKAGE(Curses)
-
-SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
-
-#
-# Generate the documentation
-#
-IF (DOT_EXECUTABLE_FOUND)
-    # Adds a macro COMPILE_DOT allowing to build png from dot files
-    INCLUDE (CMakeScripts/CompileDot.cmake)
-    ADD_SUBDIRECTORY(doc/)
-ENDIF (DOT_EXECUTABLE_FOUND)
-
-#
-# Compile the code
-#
-ADD_DEFINITIONS(-W -Wall -Werror -std=c99)
-ADD_DEFINITIONS(-D_GNU_SOURCE)              # activate code in C99 (strdup...)
-
-CONFIGURE_FILE(${PROJECT_SOURCE_DIR}/inc/cloudmig.h.in
-               ${PROJECT_BINARY_DIR}/inc/cloudmig.h
-)
-INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/inc
-                    ${PROJECT_BINARY_DIR}/inc
-)
-
-ADD_SUBDIRECTORY(src)
+# For the viewer program :
+IF (CURSES_FOUND AND CURSES_NCURSES_LIBRARY)
+    ADD_SUBDIRECTORY(viewer)
+ELSE (CURSES_FOUND AND CURSES_NCURSES_LIBRARY)
+    MESSAGE(STATUS "The cloudmig-view tool cannot be built since the ncurses"
+            "library could not be found on your system.")
+ENDIF (CURSES_FOUND AND CURSES_NCURSES_LIBRARY)
