@@ -45,6 +45,26 @@
 #include "error.h"
 #include "log.h"
 #include "status.h"
+#include "transfer_info.h"
+
+enum e_display_header
+{
+    GLOBAL_INFO     = 0,
+    THREAD_INFO     = 1,
+};
+
+
+/*
+ * This structure gives information about one thread current actions
+ */
+struct cldmig_info
+{
+    uint32_t    fsize;
+    uint32_t    fdone;
+    uint32_t    fnamlen;
+    char        *fname;
+    void        *infolist;
+};
 
 /*
  * Structure containing the migration context
@@ -53,7 +73,9 @@ struct cloudmig_ctx
 {
     dpl_ctx_t               *src_ctx;
     dpl_ctx_t               *dest_ctx;
+    int                     viewer_fd;
     struct cloudmig_status  status;
+    struct cldmig_info      *tinfos;
 };
 
 
@@ -61,6 +83,7 @@ struct cloudmig_ctx
  * Required prototypes
  */
 int     retrieve_opts(int argc, char *argv[]);
+int     setup_var_pid_and_sock(int *fd);
 int     load_profiles(struct cloudmig_ctx *ctx);
 int     load_status(struct cloudmig_ctx *ctx);
 int     status_next_incomplete_entry(struct cloudmig_ctx *ctx,
@@ -71,7 +94,9 @@ int		status_update_entry(struct cloudmig_ctx *ctx,
                             struct file_transfer_state *filestate,
                             char *bucket,
                             int32_t offset);
-int     migrate(struct cloudmig_ctx *ctx);
+int     migrate(struct cloudmig_ctx *ctx, int listen_fd);
+void    cloudmig_check_for_clients(struct cloudmig_ctx *ctx, int listen_fd);
+void    cloudmig_update_client(struct cloudmig_ctx *ctx);
 void    delete_source(struct cloudmig_ctx *ctx);
 
 /*

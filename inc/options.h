@@ -43,6 +43,7 @@ struct cloudmig_options
     int         is_dest_name;
 	const char* dest_profile;
     int         flags;
+    int         nb_threads;
 };
 
 extern struct cloudmig_options* gl_options;

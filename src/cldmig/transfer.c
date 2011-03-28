@@ -27,6 +27,7 @@
 #include <errno.h>
 #include <string.h>
 #include <stdbool.h>
+#include <sys/time.h>
 
 #include "cloudmig.h"
 
@@ -43,9 +44,24 @@ struct data_transfer
 static dpl_status_t
 transfer_data_chunk(void* data, char *buf, unsigned int len)
 {
+    struct cldmig_transf*   e;
+    struct timeval          tv;
+
     cloudmig_log(DEBUG_LVL,
     "[Migrating]: vFile %p : Transfering data chunk of %u bytes.\n",
     ((struct data_transfer*)data)->hfile, len);
+
+    /*
+     * Here, create an element for the byte rate computing list
+     * and insert it in the right info list.
+     */
+    // XXX we should use the thread_idx here instead of hard-coded index
+    gettimeofday(&tv, NULL);
+    e = new_transf_info(&tv, len);
+    insert_in_list((struct cldmig_transf**)(
+                    &((struct data_transfer*)data)->ctx->tinfos[0].infolist),
+                   e);
+
     return dpl_write(((struct data_transfer*)data)->hfile, buf, len);
 }
 
@@ -203,6 +219,90 @@ get_migrating_file_type(struct file_transfer_state* filestate)
     return DPL_FTYPE_REG;
 }
 
+static int
+migrate_object(struct cloudmig_ctx* ctx,
+              struct file_transfer_state* filestate,
+              char* srcbucket,
+              char* dstbucket)
+{
+    int     failures = 0;
+    int     ret = EXIT_FAILURE;
+
+    cloudmig_log(DEBUG_LVL,
+"[Migrating] : starting migration of file %s from bucket %s to bucket %s.\n",
+                 filestate->name, srcbucket, dstbucket);
+
+    /*
+     * First init the thread's internal data
+     */
+    // XXX Lock it
+    ctx->tinfos[0].fsize = filestate->fixed.size;
+    ctx->tinfos[0].fdone = filestate->fixed.offset;
+    ctx->tinfos[0].fnamlen = filestate->fixed.namlen;
+    ctx->tinfos[0].fname = filestate->name;
+    // XXX Unlock it
+retry:
+    switch (get_migrating_file_type(filestate))
+    {
+    case DPL_FTYPE_DIR:
+        ret = create_directory(ctx, filestate, srcbucket, dstbucket);
+        if (ret != EXIT_SUCCESS)
+        {
+            if (++failures < 3)
+            {
+                cloudmig_log(ERR_LVL,
+                    "[Migrating] : failure, retrying migration of file %s.\n",
+                             filestate->name);
+                goto retry;
+            }
+            cloudmig_log(ERR_LVL,
+                "[Migrating] : Could not migrate file %s...\n",
+                filestate->name);
+            goto ret;
+        }
+        break ;
+    case DPL_FTYPE_REG:
+        ret = transfer_file(ctx, filestate, srcbucket, dstbucket);
+        if (ret != EXIT_SUCCESS)
+        {
+            if (++failures < 3)
+            {
+                cloudmig_log(ERR_LVL,
+                    "[Migrating] : failure, retrying migration of file %s.\n",
+                             filestate->name);
+                goto retry;
+            }
+            cloudmig_log(ERR_LVL,
+                "[Migrating] : Could not migrate file %s...\n",
+                filestate->name);
+            goto ret;
+        }
+        break ;
+    default:
+        PRINTERR("%s: File %s has no type attributed ? not transfered...\n",
+                 __FUNCTION__, filestate->name);
+        break ;
+    }
+    status_update_entry(ctx, filestate, srcbucket, filestate->fixed.size);
+
+    cloudmig_log(INFO_LVL,
+    "[Migrating] : file %s from bucket %s migrated to dest bucket %s.\n",
+                 filestate->name, srcbucket, dstbucket);
+
+ret:
+    /*
+     * Cleat the thread's internal data
+     */
+    // XXX Lock it
+    ctx->tinfos[0].fsize = 0;
+    ctx->tinfos[0].fdone = 0;
+    ctx->tinfos[0].fnamlen = 0;
+    ctx->tinfos[0].fname = NULL;
+    clear_list((struct cldmig_transf**)(&(ctx->tinfos[0].infolist)));
+    // XXX Unlock it
+    return (failures < 3);
+}
+
 
 /*
  * Main migration loop :
@@ -210,73 +310,36 @@ get_migrating_file_type(struct file_transfer_state* filestate)
  * Loops on every entry and starts the transfer of each.
  */
 static int
-migrate_loop(struct cloudmig_ctx* ctx)
+migrate_loop(struct cloudmig_ctx* ctx, int listen_fd)
 {
-    int                         ret = EXIT_FAILURE;
+    unsigned int                ret = EXIT_FAILURE;
     struct file_transfer_state  cur_filestate = {{0, 0, 0}, NULL, 0, 0};
     char*                       srcbucket = NULL;
     char*                       dstbucket = NULL;
-    int                         failures;
+    size_t                      nbfailures = 0;
 
     // The call allocates the buffer for the bucket, so we must free it
     // The same goes for the cur_filestate's name field.
-try_next_file:
     while ((ret = status_next_incomplete_entry(ctx, &cur_filestate,
                                                &srcbucket, &dstbucket))
            == EXIT_SUCCESS)
     {
-        cloudmig_log(DEBUG_LVL,
-"[Migrating] : starting migration of file %s from bucket %s to bucket %s.\n",
-                     cur_filestate.name, srcbucket, dstbucket);
-        failures = 0;
-retry:
-        switch (get_migrating_file_type(&cur_filestate))
-        {
-        case DPL_FTYPE_DIR:
-            ret = create_directory(ctx, &cur_filestate, srcbucket, dstbucket);
-            if (ret != EXIT_SUCCESS)
-            {
-                if (++failures < 3)
-                {
-                    cloudmig_log(ERR_LVL,
-                    "[Migrating] : failure, retrying migration of file %s.\n",
-                    cur_filestate.name);
-                    goto retry;
-                }
-                goto try_next_file;
-            }
-            break ;
-        case DPL_FTYPE_REG:
-            ret = transfer_file(ctx, &cur_filestate, srcbucket, dstbucket);
-            if (ret != EXIT_SUCCESS)
-            {
-                if (++failures < 3)
-                {
-                    cloudmig_log(ERR_LVL,
-                    "[Migrating] : failure, retrying migration of file %s.\n",
-                    cur_filestate.name);
-                    goto retry;
-                }
-                goto try_next_file;
-            }
-            break ;
-        default:
-            PRINTERR("%s: File %s has no type attributed ? not transfered...\n",
-                     __FUNCTION__, cur_filestate.name);
-            break ;
-        }
-        /* Only update status if transfer suceeded */
-        if (failures < 3)
-            status_update_entry(ctx, &cur_filestate,
-                                srcbucket, cur_filestate.fixed.size);
+        if (migrate_object(ctx, &cur_filestate, srcbucket, dstbucket))
+            ++nbfailures;
 
-        cloudmig_log(INFO_LVL,
-        "[Migrating] : file %s from bucket %s migrated to dest bucket %s.\n",
-                     cur_filestate.name, srcbucket, dstbucket);
+        /*
+         * This function actually selects with timeout = 0 on the listening
+         * socket to see if an accept is needed
+         */
+        cloudmig_check_for_clients(ctx, listen_fd);
+        /* In any case, let's update a viewer-client if there's one */
+        cloudmig_update_client(ctx);
+
+
+        // Clean up datas...
         free(srcbucket);
         srcbucket = NULL;
         dstbucket = NULL; // this one is not allocated for us (Copied pointer).
-
         free(cur_filestate.name);
         cur_filestate.name = NULL;
     }
@@ -286,7 +349,7 @@ retry:
     if (cur_filestate.name)
         free(cur_filestate.name);
 
-    return (ret);
+    return (ret == ENODATA ? nbfailures : ret);
 }
 
 
@@ -297,7 +360,7 @@ retry:
  * if the migration was a success.
  */
 int
-migrate(struct cloudmig_ctx* ctx)
+migrate(struct cloudmig_ctx* ctx, int listen_fd)
 {
     int                         ret = EXIT_FAILURE;
 
@@ -308,9 +371,9 @@ migrate(struct cloudmig_ctx* ctx)
      * need.
      */
 
-    ret = migrate_loop(ctx);
-    // Check if it was the end of the transfer by checking ret agains ENODATA
-    if (ret == ENODATA)
+    ret = migrate_loop(ctx, listen_fd);
+    // Check if it was the end of the transfer by checking ret against 0
+    if (ret == 0) // 0 == number of failures that occured.
     {
         cloudmig_log(DEBUG_LVL, "Migration finished with success !\n");
         // TODO FIXME XXX

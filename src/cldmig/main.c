@@ -33,21 +33,38 @@ struct cloudmig_options *	gl_options = NULL;
 
 int main(int argc, char* argv[])
 {
-	struct cloudmig_options options = {0, 0, 0, 0, 0};
+	struct cloudmig_options options = {0, 0, 0, 0, 0, 1};
 	gl_options = &options;
 
     if (retrieve_opts(argc, argv))
         return (EXIT_FAILURE);
+
+    int sockfd = -1;
+    if (setup_var_pid_and_sock(&sockfd))
+        return (EXIT_FAILURE);
 	
     struct cloudmig_ctx     ctx =
-        { 0, 0, { { {0, 0, 0, 0}, 0, NULL }, NULL, 0, 0, NULL} };
+        {
+            NULL,
+            NULL,
+            -1,
+            { { {0, 0, 0, 0}, 0, NULL }, NULL, 0, 0, NULL},
+            NULL
+        };
+    ctx.tinfos = calloc(options.nb_threads, sizeof(*ctx.tinfos));
+    if (ctx.tinfos == NULL)
+    {
+        PRINTERR("Could not allocate memory for transfer informations.", 0);
+        return (EXIT_FAILURE);
+    }
+
     if (load_profiles(&ctx))
         return (EXIT_FAILURE);
 
     if (load_status(&ctx))
         return (EXIT_FAILURE);
 
-    if (migrate(&ctx))
+    if (migrate(&ctx, sockfd))
         return (EXIT_FAILURE);
 
 	return (EXIT_SUCCESS);

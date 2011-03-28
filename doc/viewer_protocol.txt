@@ -1,0 +1,112 @@
+## Copyright (c) 2011, David Pineau
+## All rights reserved.
+##
+## Redistribution and use in source and binary forms, with or without
+## modification, are permitted provided that the following conditions are met:
+##  * Redistributions of source code must retain the above copyright
+##    notice, this list of conditions and the following disclaimer.
+##  * Redistributions in binary form must reproduce the above copyright
+##    notice, this list of conditions and the following disclaimer in the
+##    documentation and/or other materials provided with the distribution.
+##  * Neither the name of the copyright holder nor the names of its contributors
+##    may be used to endorse or promote products derived from this software
+##    without specific prior written permission.
+##
+## THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+## AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+## IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+## ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER AND CONTRIBUTORS BE
+## LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+## CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+## SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+## INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+## CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+## ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+## POSSIBILITY OF SUCH DAMAGE.
+##
+
+
+
+This document aims to document the format of the data given by the cloudmig
+tool in order for third-party application to construct a graphical view of the
+state of the migration.
+
+The first thing to understand is that the cloudmig tool does not provide any
+form of display by itself. Its role is merely to transfer the data from an
+account to another. In order for third-party programs to get information about
+the migration and to display a view of it, a temporary directory is used.
+
+The migration tool creates a temporary directory : /tmp/cloudmig In this
+directory is created another directory, named after the pid of the process
+currently migrating data. This way, multiple migrations can occur at the same
+time without conflicting with each other (though it may not be that often).
+
+In each of those pid directories, the associated migration tool creates a
+unix socket file named "display.sock" that is to be used as the data input for
+the view. The tool only supports one viewer at a time, since supporting too
+many of them may prove to be a burden on the migration. That is why a viewer
+must create a file named "display.lock" in the same directory as the unix
+socket file. 
+
+
+When a viewer is connected to the socket, the tool automatically sends the
+updates about the migration's status. As the viewer will be run on the same
+computer as the tool, there is no need to take care of endianness. That is why,
+for easiness of parsing, the data is transfered as raw binary data, following
+the machine's endianness.
+
+
+
+Since the tool can be run with threads or without, the main process's
+informations will be sent as it will be for a thread.  For this purpose, a
+little header is needed for each data structure sent over this unix socket :
+
+-------------------------------------------------------------------------------
+| unsigned char (1 byte) : Actually an enum value:                            |
+|                              0      -> Global status information            |
+|                              1      -> Thread status information            |
+|                                        (including byte rate)                |
+|                              other  -> Undefined                            |
+-------------------------------------------------------------------------------
+
+
+
+Next, depending on the value of this little header, is sent a data structure.
+The data structure for the global status informations (meaning the status of
+the migration itself) will be formatted as follows (it actually matches the
+structure cloudmig_state_header of the tool's code) :
+
+
+-------------------------------------------------------------------------------
+| unsigned integer (8 bytes) : Total size of the data to transfer in bytes    |
+|-----------------------------------------------------------------------------|
+| unsigned integer (8 bytes) : Size of Data already transfered                |
+|-----------------------------------------------------------------------------|
+| unsigned integer (8 bytes) : Total number of objects/files to transfer      |
+|-----------------------------------------------------------------------------|
+| unsigned integer (8 bytes) : Number of files already transfered             |
+-------------------------------------------------------------------------------
+
+
+
+In the case of an header value of 1, for a thread status information, the
+data written to the unix socket will be formatted as follows :
+
+-------------------------------------------------------------------------------
+| unsigned integer (4 bytes) : Thread ID                                      |
+|-----------------------------------------------------------------------------|
+| unsigned integer (4 bytes) : Size of the file being migrated                |
+|-----------------------------------------------------------------------------|
+| unsigned integer (4 bytes) : Quantity of data already transfered for this   |
+|                              file                                           |
+|-----------------------------------------------------------------------------|
+| unsigned integer (4 bytes) : Average of bytes transfered per second         |
+|-----------------------------------------------------------------------------|
+| unsigned integer (4 bytes) : size of the file's name (including nul byte)   |
+|-----------------------------------------------------------------------------|
+| DATA :                                                                      |
+|                                                                             |
+|    The content of the file's name (the exact size of the previous field)    |
+|                                                                             |
+-------------------------------------------------------------------------------
+

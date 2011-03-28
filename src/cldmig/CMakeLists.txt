@@ -30,15 +30,18 @@ INCLUDE_DIRECTORIES(${DROPLET_INCLUDE_DIR}
 )
 
 SET(CLOUDMIG_SRC    main.c
-                    options.c
-                    log.c
-                    load_profiles.c
-                    transfer.c
-                    status.c
+
                     create_status.c
-                    retrieve_status.c
-                    utils.c
                     delete_files.c
+                    display.c
+                    load_profiles.c
+                    log.c
+                    options.c
+                    retrieve_status.c
+                    status.c
+                    transfer.c
+                    transfer_info.c
+                    utils.c
 )
 
 ADD_EXECUTABLE(cloudmig ${CLOUDMIG_SRC})
