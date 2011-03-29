@@ -25,33 +25,10 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 
-#include <curses.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
+// Main functions
+int main_menu(void);
 
-#include "tool_instances.h"
-#include "viewer.h"
+// Utils for tool_instances
+struct tool_instance    *get_instance_list(void);
+void                    clear_instance_list(struct tool_instance *list);
 
-
-int main()
-{
-    int ret = EXIT_SUCCESS;
-    
-    initscr();
-    start_color();
-    cbreak();
-    noecho();
-    keypad(stdscr, TRUE);
-
-    if (main_menu())
-        ret = EXIT_FAILURE;
-
-    keypad(stdscr, FALSE);
-    echo();
-    nocbreak();
-    endwin();
-
-    return ret;
-}

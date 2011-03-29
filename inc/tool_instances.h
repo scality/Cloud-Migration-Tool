@@ -24,34 +24,15 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
+#ifndef __CLOUDMIG_VIEW_TOOL_INSTANCES_H__
+#define __CLOUDMIG_VIEW_TOOL_INSTANCES_H__
 
-#include <curses.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-
-#include "tool_instances.h"
-#include "viewer.h"
-
-
-int main()
+struct tool_instance
 {
-    int ret = EXIT_SUCCESS;
-    
-    initscr();
-    start_color();
-    cbreak();
-    noecho();
-    keypad(stdscr, TRUE);
+    struct tool_instance    *next;
+    char                    *dirpath;
+    char                    *process;
+};
 
-    if (main_menu())
-        ret = EXIT_FAILURE;
 
-    keypad(stdscr, FALSE);
-    echo();
-    nocbreak();
-    endwin();
-
-    return ret;
-}
+#endif /* ! __CLOUDMIG_VIEW_TOOL_INSTANCES_H__ */

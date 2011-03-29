@@ -29,7 +29,9 @@ INCLUDE_DIRECTORIES(${CURSES_NCURSES_INCLUDE_PATH}
 )
 
 SET(VIEWER_SRC      main.c
+                    instances_menu.c
+                    tool_instances.c
 )
 
 ADD_EXECUTABLE(cloudmig-view ${VIEWER_SRC})
-TARGET_LINK_LIBRARIES(cloudmig-view ${CURSES_NCURSES_LIBRARY})
+TARGET_LINK_LIBRARIES(cloudmig-view ${CURSES_NCURSES_LIBRARY} /usr/lib/libmenu.so)
