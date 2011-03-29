@@ -46,12 +46,7 @@
 #include "log.h"
 #include "status.h"
 #include "transfer_info.h"
-
-enum e_display_header
-{
-    GLOBAL_INFO     = 0,
-    THREAD_INFO     = 1,
-};
+#include "display_protocol.h"
 
 
 /*

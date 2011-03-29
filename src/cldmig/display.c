@@ -229,14 +229,7 @@ void cloudmig_update_client(struct cloudmig_ctx *ctx)
             &tlimit,
             (struct cldmig_transf**)&(ctx->tinfos[threadid].infolist)
         );
-        struct cldmig_thread_info
-        {
-            uint32_t    id;
-            uint32_t    fsize;
-            uint32_t    fdone;
-            uint32_t    byterate;
-            uint32_t    namlen;
-        } tinfo = {
+        struct cldmig_thread_info tinfo = {
             threadid,
             ctx->tinfos[threadid].fsize,
             ctx->tinfos[threadid].fdone,
