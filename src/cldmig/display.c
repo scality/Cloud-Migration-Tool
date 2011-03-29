@@ -181,7 +181,8 @@ retry:
 }
 
 
-void cloudmig_update_client(struct cloudmig_ctx *ctx)
+void
+cloudmig_update_client(struct cloudmig_ctx *ctx)
 {
     static struct timeval lastupdate;
     struct timeval tlimit;
