@@ -29,6 +29,7 @@ INCLUDE_DIRECTORIES(${CURSES_NCURSES_INCLUDE_PATH}
 )
 
 SET(VIEWER_SRC      main.c
+                    init.c
                     instances_menu.c
                     tool_instances.c
 )

@@ -42,12 +42,21 @@ int main()
     initscr();
     start_color();
     cbreak();
+    nonl();
     noecho();
     keypad(stdscr, TRUE);
+
+    if (viewer_init_colors())
+    {
+        ret = EXIT_FAILURE;
+        goto uninit;
+    }
 
     if (main_menu())
         ret = EXIT_FAILURE;
 
+uninit:
+    viewer_restore_colors();
     keypad(stdscr, FALSE);
     echo();
     nocbreak();

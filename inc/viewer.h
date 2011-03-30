@@ -26,7 +26,9 @@
 
 
 // Main functions
-int main_menu(void);
+int     viewer_init_colors(void);
+void    viewer_restore_colors(void);
+int     main_menu(void);
 
 // Utils for tool_instances
 struct tool_instance    *get_instance_list(void);

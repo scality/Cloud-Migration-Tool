@@ -31,6 +31,7 @@
 #include <menu.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "tool_instances.h"
 #include "viewer.h"

@@ -27,6 +27,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#include <curses.h>
 #include <dirent.h>
 #include <err.h>
 #include <stdio.h>
@@ -48,8 +49,8 @@ get_instance_list(void)
     cldmig_dir = opendir("/tmp/cloudmig");
     if (cldmig_dir == NULL)
     {
-        fprintf(stderr,
-                "cloudmig-view: No cloudmig tool is running at the moment.\n");
+        mvprintw(0, 0,
+                 "cloudmig-view: No cloudmig tool is running at the moment.\n");
         return NULL;
     }
 
@@ -72,7 +73,8 @@ get_instance_list(void)
             struct tool_instance *e = calloc(1, sizeof(*e));
             if (e == NULL)
             {
-                fprintf(stderr, "cloudmig-view: Could not allocate memory.\n");
+                mvprintw(0, 0,
+                "cloudmig-view: Could not allocate memory.\n");
                 // Dont care about freeing allocated things,
                 // we'll exit soon enough
                 return NULL;
@@ -80,7 +82,8 @@ get_instance_list(void)
             e->dirpath = strdup(path);
             if (e->dirpath == NULL)
             {
-                fprintf(stderr, "cloudmig-view: Could not allocate memory.\n");
+                mvprintw(0, 0,
+                "cloudmig-view: Could not allocate memory.\n");
                 // Dont care about freeing allocated things,
                 // we'll exit soon enough
                 return NULL;
