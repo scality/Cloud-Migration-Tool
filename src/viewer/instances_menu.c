@@ -146,7 +146,6 @@ main_menu(void)
         // Leave the monitor
         case 'q':
         case 'Q':
-        case KEY_ESC: // escape
             break ;
         // Ignore the others
         default:
