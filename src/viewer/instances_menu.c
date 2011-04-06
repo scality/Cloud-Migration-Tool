@@ -101,30 +101,8 @@ main_menu(void)
 
     do
     {
-        mvprintw(LINES - 4, 0,
-                 "Use <SPACE> or <ENTER> to select the process to monitor.");
-        mvprintw(LINES - 3, 0,
-                 "    <q> or <Q> to quit this program.");
-        mvprintw(LINES - 2, 0,
-                 "    <r> or <R> to see refresh the list manually.");
-        mvprintw(LINES -6, 0, "Key = %i", c);
-        ITEM  **items = NULL;
         switch (c)
         {
-        // Refresh the list.
-        case 'r':
-        case 'R':
-            if (list)
-                clear_instance_list(list);
-            list = get_instance_list();
-
-            if (my_menu)
-                clear_menu(my_menu, my_items);
-            
-            if (fill_menu(list, &my_items, &my_menu))
-                return EXIT_FAILURE;
-            post_menu(my_menu);
-            break;
         // Navigate in the menu
         case KEY_DOWN:
         case KEY_RIGHT:
@@ -137,15 +115,31 @@ main_menu(void)
         // Select a migration to monitor
         case ' ':
         case 10:
-            items = menu_items(my_menu);
-            for(int i = 0; i < item_count(my_menu); ++i)
             {
-                if(item_value(items[i]) == TRUE)
+                if (item_count(my_menu) > 0)
                 {
-                    break ;
+                    ITEM *curitem = current_item(my_menu);
+                    view_instance(item_description(curitem));
                 }
             }
-            break ;
+            // No break here to allow refreshing the list
+            // when coming out of the instance display.
+        // Refresh the list.
+        case 'r':
+        case 'R':
+            if (list)
+                clear_instance_list(list);
+            list = get_instance_list();
+
+            if (my_menu)
+                clear_menu(my_menu, my_items);
+            my_items = NULL;
+            my_menu = NULL;
+            
+            if (fill_menu(list, &my_items, &my_menu))
+                return EXIT_FAILURE;
+            post_menu(my_menu);
+            break;
         // Leave the monitor
         case 'q':
         case 'Q':
@@ -154,6 +148,13 @@ main_menu(void)
         default:
             break ;
         }
+        mvprintw(LINES - 4, 0,
+                 "Use <SPACE> or <ENTER> to select the process to monitor.");
+        mvprintw(LINES - 3, 0,
+                 "    <q> or <Q> to quit this program.");
+        mvprintw(LINES - 2, 0,
+                 "    <r> or <R> to see refresh the list manually.");
+        mvprintw(LINES -6, 0, "Key = %i", c);
         refresh();
     } while ((c = getch()) != 'q');
 
