@@ -24,11 +24,20 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
+// Forward decls
+struct tool_instance;
+struct cldmig_global_info;
+struct thread_info;
+struct message;
 
 // Main functions
 int     viewer_init_colors(void);
 void    viewer_restore_colors(void);
 int     main_menu(void);
+int     view_instance(const char *path);
+void    display(struct cldmig_global_info *ginfo,
+                struct thread_info* thr_data, uint32_t thr_nb,
+                struct message* msgs);
 
 // Utils for tool_instances
 struct tool_instance    *get_instance_list(void);

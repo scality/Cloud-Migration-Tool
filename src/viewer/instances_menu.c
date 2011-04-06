@@ -29,11 +29,13 @@
 #include <errno.h>
 #include <ncurses.h>
 #include <menu.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
 #include "tool_instances.h"
+
 #include "viewer.h"
 
 static int
@@ -82,10 +84,10 @@ static void
 clear_menu(MENU* my_menu, ITEM** my_items)
 {
     unpost_menu(my_menu);
+    free_menu(my_menu);
     for (int i =0; my_items[i]; ++i)
         free_item(my_items[i]);
     free(my_items);
-    free_menu(my_menu);
 }
 
 int

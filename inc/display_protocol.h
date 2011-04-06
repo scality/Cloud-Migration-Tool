@@ -33,6 +33,13 @@ enum e_display_header
 {
     GLOBAL_INFO     = 0,
     THREAD_INFO     = 1,
+    MSG             = 2
+};
+
+enum msg_type
+{
+    DEFAULT     = 0,
+    TEST        = 1
 };
 
 struct cldmig_global_info
