@@ -78,7 +78,7 @@ struct cloudmig_ctx
  * Required prototypes
  */
 int     retrieve_opts(int argc, char *argv[]);
-int     setup_var_pid_and_sock(int *fd);
+int     setup_var_pid_and_sock();
 int     load_profiles(struct cloudmig_ctx *ctx);
 int     load_status(struct cloudmig_ctx *ctx);
 int     status_next_incomplete_entry(struct cloudmig_ctx *ctx,
@@ -89,10 +89,11 @@ int		status_update_entry(struct cloudmig_ctx *ctx,
                             struct file_transfer_state *filestate,
                             char *bucket,
                             int32_t offset);
-int     migrate(struct cloudmig_ctx *ctx, int listen_fd);
-void    cloudmig_check_for_clients(struct cloudmig_ctx *ctx, int listen_fd);
+int     migrate(struct cloudmig_ctx *ctx);
+void    cloudmig_check_for_clients(struct cloudmig_ctx *ctx);
 void    cloudmig_update_client(struct cloudmig_ctx *ctx);
 void    delete_source(struct cloudmig_ctx *ctx);
+void    unsetup_var_pid_and_sock();
 
 /*
  * Used as load_status dependencies
@@ -109,5 +110,10 @@ int     status_retrieve_states(struct cloudmig_ctx* ctx);
 int     cloudmig_map_bucket_state(struct cloudmig_ctx* ctx,
                                   struct transfer_state* bucket_state);
 char*   cloudmig_get_status_filename_from_bucket(char *bucket);
+
+
+// Global data declared in the main.c file.
+extern int     gl_accept_sock;
+extern char    *gl_sockfile;
 
 #endif /* ! __CLOUDMIG_H__ */

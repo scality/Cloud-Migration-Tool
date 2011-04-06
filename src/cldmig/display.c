@@ -33,6 +33,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -80,8 +81,21 @@ create_log_socket(char * filename)
     return listen_fd;
 }
 
+void
+unsetup_var_pid_and_sock()
+{
+    shutdown(gl_accept_sock, SHUT_RDWR);
+    close(gl_accept_sock);
+
+    // For unlink, errors are not checked since other migrations may be running.
+    unlink(gl_sockfile);
+    gl_sockfile[strlen(gl_sockfile) - 12] = '\0'; // remove "display.sock"
+    rmdir(gl_sockfile);
+    rmdir("/tmp/cloudmig/");
+}
+
 int
-setup_var_pid_and_sock(int *fd)
+setup_var_pid_and_sock()
 {
     char    pid_str[32];
     // By using the size of sun_path, we seek to avoid buffer overflows in file
@@ -109,9 +123,9 @@ setup_var_pid_and_sock(int *fd)
         {
             if (errno != ENOTEMPTY)
             {
-            PRINTERR("Could not remove /tmp/cloudmig directory : %s. \
-Please remove it manually.\n",
-                     strerror(errno));
+                PRINTERR("Could not remove /tmp/cloudmig directory : %s. \
+                         Please remove it manually.\n",
+                         strerror(errno));
             }
         }
         return (EXIT_FAILURE);
@@ -119,8 +133,13 @@ Please remove it manually.\n",
 
     snprintf(sockfile, sizeof(sockfile), "%s/display.sock",
              pid_str);
-    *fd = create_log_socket(sockfile);
-    if (*fd == -1)
+    // First, save the file name into a global string ptr.
+    gl_sockfile = strdup(sockfile);
+    if (gl_sockfile == NULL)
+        return EXIT_FAILURE;
+
+    gl_accept_sock = create_log_socket(sockfile);
+    if (gl_accept_sock == -1)
         return (EXIT_FAILURE);
 
     return (EXIT_SUCCESS);
@@ -128,12 +147,12 @@ Please remove it manually.\n",
 
 
 static void
-accept_client(struct cloudmig_ctx *ctx, int listen_fd)
+accept_client(struct cloudmig_ctx *ctx)
 {
     struct sockaddr_un      client_addr;
-    socklen_t               client_socklen;
+    socklen_t               client_socklen = sizeof(client_addr);
 
-    int client_sock = accept(listen_fd,
+    int client_sock = accept(gl_accept_sock,
                              (struct sockaddr*)&client_addr,
                              &client_socklen);
     if (client_sock == -1)
@@ -158,16 +177,16 @@ accept_client(struct cloudmig_ctx *ctx, int listen_fd)
 
 
 void
-cloudmig_check_for_clients(struct cloudmig_ctx *ctx, int listen_fd)
+cloudmig_check_for_clients(struct cloudmig_ctx *ctx)
 {
     struct timeval  timeout = {0, 0};
     fd_set          rfds;
 
     FD_ZERO(&rfds);
-    FD_SET(listen_fd, &rfds);
+    FD_SET(gl_accept_sock, &rfds);
 
 retry:
-    if (select(listen_fd + 1, &rfds, NULL, NULL, &timeout) == -1)
+    if (select(gl_accept_sock + 1, &rfds, NULL, NULL, &timeout) == -1)
     {
         if (errno == EINTR)
             goto retry;
@@ -176,8 +195,8 @@ retry:
         return ;
     }
 
-    if (FD_ISSET(listen_fd, &rfds))
-        accept_client(ctx, listen_fd);
+    if (FD_ISSET(gl_accept_sock, &rfds))
+        accept_client(ctx);
 }
 
 

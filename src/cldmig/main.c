@@ -24,12 +24,31 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
+#include <signal.h>
 #include <stdlib.h>
 
 #include "cloudmig.h"
 #include "options.h"
 
+
 struct cloudmig_options *	gl_options = NULL;
+int                         gl_accept_sock = -1;
+char                        *gl_sockfile = NULL;
+
+void
+cloudmig_sighandler(int sig)
+{
+    switch (sig)
+    {
+    case SIGINT:
+        printf("Interrupted by SINGINT... stopping.\n");
+        unsetup_var_pid_and_sock();
+        exit(EXIT_SUCCESS);
+        break ;
+    default:
+        break;
+    }
+}
 
 int main(int argc, char* argv[])
 {
@@ -39,8 +58,7 @@ int main(int argc, char* argv[])
     if (retrieve_opts(argc, argv))
         return (EXIT_FAILURE);
 
-    int sockfd = -1;
-    if (setup_var_pid_and_sock(&sockfd))
+    if (setup_var_pid_and_sock())
         return (EXIT_FAILURE);
 	
     struct cloudmig_ctx     ctx =
@@ -55,17 +73,25 @@ int main(int argc, char* argv[])
     if (ctx.tinfos == NULL)
     {
         PRINTERR("Could not allocate memory for transfer informations.", 0);
-        return (EXIT_FAILURE);
+        goto failure;
     }
 
     if (load_profiles(&ctx))
-        return (EXIT_FAILURE);
+        goto failure;
 
     if (load_status(&ctx))
-        return (EXIT_FAILURE);
+        goto failure;
 
-    if (migrate(&ctx, sockfd))
-        return (EXIT_FAILURE);
+    signal(SIGINT, &cloudmig_sighandler);
+
+    if (migrate(&ctx))
+        goto failure;
 
 	return (EXIT_SUCCESS);
+
+failure:
+    unsetup_var_pid_and_sock();
+
+
+	return (EXIT_FAILURE);
 }

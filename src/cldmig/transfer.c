@@ -310,7 +310,7 @@ ret:
  * Loops on every entry and starts the transfer of each.
  */
 static int
-migrate_loop(struct cloudmig_ctx* ctx, int listen_fd)
+migrate_loop(struct cloudmig_ctx* ctx)
 {
     unsigned int                ret = EXIT_FAILURE;
     struct file_transfer_state  cur_filestate = {{0, 0, 0}, NULL, 0, 0};
@@ -331,7 +331,7 @@ migrate_loop(struct cloudmig_ctx* ctx, int listen_fd)
          * This function actually selects with timeout = 0 on the listening
          * socket to see if an accept is needed
          */
-        cloudmig_check_for_clients(ctx, listen_fd);
+        cloudmig_check_for_clients(ctx);
         /* In any case, let's update a viewer-client if there's one */
         cloudmig_update_client(ctx);
 
@@ -360,7 +360,7 @@ migrate_loop(struct cloudmig_ctx* ctx, int listen_fd)
  * if the migration was a success.
  */
 int
-migrate(struct cloudmig_ctx* ctx, int listen_fd)
+migrate(struct cloudmig_ctx* ctx)
 {
     int                         ret = EXIT_FAILURE;
 
@@ -371,7 +371,7 @@ migrate(struct cloudmig_ctx* ctx, int listen_fd)
      * need.
      */
 
-    ret = migrate_loop(ctx, listen_fd);
+    ret = migrate_loop(ctx);
     // Check if it was the end of the transfer by checking ret against 0
     if (ret == 0) // 0 == number of failures that occured.
     {
