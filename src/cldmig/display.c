@@ -211,10 +211,10 @@ cloudmig_update_client(struct cloudmig_ctx *ctx)
     if (ctx->viewer_fd == -1)
         return ;
 
-    // TODO : Check that lastupdate was done at least 1 sec before
+    // TODO : Check that lastupdate was done at least 1/4 sec before
     gettimeofday(&tlimit, NULL);
-    if (!(lastupdate.tv_sec < tlimit.tv_sec
-        && lastupdate.tv_usec < tlimit.tv_usec))
+    if (((tlimit.tv_sec - lastupdate.tv_sec) * 1000000
+         + tlimit.tv_usec - lastupdate.tv_usec) < 250000)
         return ;
     lastupdate = tlimit; 
 
@@ -236,7 +236,7 @@ cloudmig_update_client(struct cloudmig_ctx *ctx)
      */
     int threadid = -1;
     // Set the limit for removal of infolist items.
-    tlimit.tv_sec -= 2;
+    tlimit.tv_sec -= 3;
 
     do
     {
