@@ -56,11 +56,17 @@ transfer_data_chunk(void* data, char *buf, unsigned int len)
      * and insert it in the right info list.
      */
     // XXX we should use the thread_idx here instead of hard-coded index
+    ((struct data_transfer*)data)->ctx->tinfos[0].fdone += len;
     gettimeofday(&tv, NULL);
     e = new_transf_info(&tv, len);
     insert_in_list((struct cldmig_transf**)(
                     &((struct data_transfer*)data)->ctx->tinfos[0].infolist),
                    e);
+
+    cloudmig_check_for_clients(((struct data_transfer*)data)->ctx);
+    /* In any case, let's update a viewer-client if there's one */
+    cloudmig_update_client(((struct data_transfer*)data)->ctx);
+
 
     return dpl_write(((struct data_transfer*)data)->hfile, buf, len);
 }
@@ -326,15 +332,6 @@ migrate_loop(struct cloudmig_ctx* ctx)
     {
         if (migrate_object(ctx, &cur_filestate, srcbucket, dstbucket))
             ++nbfailures;
-
-        /*
-         * This function actually selects with timeout = 0 on the listening
-         * socket to see if an accept is needed
-         */
-        cloudmig_check_for_clients(ctx);
-        /* In any case, let's update a viewer-client if there's one */
-        cloudmig_update_client(ctx);
-
 
         // Clean up datas...
         free(srcbucket);

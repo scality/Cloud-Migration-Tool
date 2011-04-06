@@ -203,8 +203,9 @@ retry:
 void
 cloudmig_update_client(struct cloudmig_ctx *ctx)
 {
-    static struct timeval lastupdate;
-    struct timeval tlimit;
+    static struct timeval lastupdate = {0, 0};
+    struct timeval tlimit = {0, 0};
+    char head;
 
     // No use doing anything if there's no fd for it...
     if (ctx->viewer_fd == -1)
@@ -217,38 +218,36 @@ cloudmig_update_client(struct cloudmig_ctx *ctx)
         return ;
     lastupdate = tlimit; 
 
-
-
-    char head;
-
     /*
      * First, send the global information on the migration :
      */
     head = GLOBAL_INFO;
     // First write the header for viewer client
-    write(ctx->viewer_fd, &head, 1);
+    if (send(ctx->viewer_fd, &head, 1, MSG_NOSIGNAL) == -1)
+        goto unset_viewer_fd;
+
     // Then write the associated data
-    write(ctx->viewer_fd,
-          &ctx->status.general.head, sizeof(ctx->status.general.head));
+    if (send(ctx->viewer_fd, &ctx->status.general.head,
+              sizeof(ctx->status.general.head), MSG_NOSIGNAL) == -1)
+        goto unset_viewer_fd;
 
     /*
      * Next, send each thread info :
      */
-    int threadid = 0;
+    int threadid = -1;
     // Set the limit for removal of infolist items.
     tlimit.tv_sec -= 2;
 
     do
     {
+        ++threadid;
         // TODO : Will have a loop here to iterate on all threads
         // XXX Lock the thread's info
-        head = THREAD_INFO;
-        write(ctx->viewer_fd, &head, 1);
-
         remove_old_items(
             &tlimit,
             (struct cldmig_transf**)&(ctx->tinfos[threadid].infolist)
         );
+
         struct cldmig_thread_info tinfo = {
             threadid,
             ctx->tinfos[threadid].fsize,
@@ -260,16 +259,28 @@ cloudmig_update_client(struct cloudmig_ctx *ctx)
         };
 
         // Write the struct
-        write(ctx->viewer_fd, &tinfo, sizeof(tinfo));
+        head = THREAD_INFO;
+        if (send(ctx->viewer_fd, &head, 1, MSG_NOSIGNAL) == -1)
+            goto unset_viewer_fd;
+        if (send(ctx->viewer_fd, &tinfo, sizeof(tinfo), MSG_NOSIGNAL) == -1)
+            goto unset_viewer_fd;
         // Write the filename
-        write(ctx->viewer_fd,
+        if (send(ctx->viewer_fd,
               ctx->tinfos[threadid].fname,
-              ctx->tinfos[threadid].fnamlen);
+              ctx->tinfos[threadid].fnamlen, MSG_NOSIGNAL) == -1)
+            goto unset_viewer_fd;
         // We're done with this thread !
         // XXX Unlock the thread's info
-        ++threadid;
-    } while (threadid < gl_options->nb_threads);
+    } while ((threadid + 1) < gl_options->nb_threads);
 
+    return ;
+
+unset_viewer_fd:
+    if (errno == EPIPE)
+    {
+        close(ctx->viewer_fd);
+        ctx->viewer_fd = -1;
+    }
 }
 
 

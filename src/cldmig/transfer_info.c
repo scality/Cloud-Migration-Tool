@@ -101,7 +101,10 @@ remove_old_items(struct timeval *limit, struct cldmig_transf **list)
            && !time_is_lesser(&cur->next->t, limit))
         cur = cur->next;
 
-    // Then remove the rest.
+    // If there's only one item...
+    if (cur == *list)
+        *list = NULL;
+    // Remove the rest...
     while (cur && time_is_lesser(&cur->t, limit))
     {
         tmp = cur;
@@ -112,7 +115,7 @@ remove_old_items(struct timeval *limit, struct cldmig_transf **list)
     /*
      * Now if the first one was to be deleted, it should be the only one left :
      */
-    if (time_is_lesser(&(*list)->t, limit))
+    if (*list && time_is_lesser(&(*list)->t, limit))
     {
         free(*list);
         *list = NULL;
@@ -125,6 +128,9 @@ make_list_transfer_rate(struct cldmig_transf *list)
     struct cldmig_transf    *cur = list;
     float rate = 0.0;
     float time;
+
+    if (list == NULL)
+        return 0;
 
     // First sum up all the data transfered.
     while (cur->next != NULL)
