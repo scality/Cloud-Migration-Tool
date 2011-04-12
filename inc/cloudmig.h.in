@@ -94,6 +94,14 @@ void    cloudmig_check_for_clients(struct cloudmig_ctx *ctx);
 void    cloudmig_update_client(struct cloudmig_ctx *ctx);
 void    delete_source(struct cloudmig_ctx *ctx);
 void    unsetup_var_pid_and_sock();
+int     transfer_file(struct cloudmig_ctx *ctx,
+                      struct file_transfer_state *filestate,
+                      char *srcbucket,
+                      char *dstbucket);
+int     create_directory(struct cloudmig_ctx *ctx,
+                         struct file_transfer_state *filestate,
+                         char *srcbucket,
+                         char *dstbucket);
 
 /*
  * Used as load_status dependencies
