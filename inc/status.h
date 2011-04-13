@@ -103,7 +103,7 @@ struct file_transfer_state
 {
     struct file_state_entry fixed;  // fixed
     char                    *name;  // name of the file
-
+    char                    *dst;   // name of the dest file
     // Data allowing to retrieve easily where does this entry come from
     int                     state_idx;
     unsigned int            offset;

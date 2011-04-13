@@ -79,28 +79,20 @@ transfer_data_chunk(void* data, char *buf, unsigned int len)
 // TODO FIXME : Do it with the correct attributes
 int
 transfer_file(struct cloudmig_ctx* ctx,
-              struct file_transfer_state* filestate,
-              char* srcbucket,
-              char* dstbucket)
+              struct file_transfer_state* filestate)
 {
     int                     ret = EXIT_FAILURE;
     dpl_status_t            dplret;
-    char*                   bucket_dstctx = ctx->dest_ctx->cur_bucket;
-    char*                   bucket_srcctx = ctx->src_ctx->cur_bucket;
     struct data_transfer    cb_data = { .hfile=NULL, .ctx=ctx };
 
     cloudmig_log(INFO_LVL,
-"[Migrating] : file (len=%i)''%s'' is a regular file : starting transfer...\n",
-                filestate->fixed.namlen, filestate->name);
+    "[Migrating] : file '%s' is a regular file : starting transfer...\n",
+    filestate->name);
 
-    ctx->dest_ctx->cur_bucket = dstbucket;
-    ctx->src_ctx->cur_bucket = srcbucket;
-    
-    
     /*
      * First, open the destination file for writing.
      */
-    dplret = dpl_openwrite(ctx->dest_ctx, filestate->name,
+    dplret = dpl_openwrite(ctx->dest_ctx, filestate->dst,
                            DPL_VFILE_FLAG_CREAT,
                            NULL, // metadata
                            DPL_CANNED_ACL_PRIVATE,
@@ -108,9 +100,8 @@ transfer_file(struct cloudmig_ctx* ctx,
                            &cb_data.hfile);
     if (dplret != DPL_SUCCESS)
     {
-        PRINTERR("%s: Could not open dest file %s in bucket %s : %s\n",
-                 __FUNCTION__, filestate->name, dstbucket,
-                 dpl_status_str(dplret));
+        PRINTERR("%s: Could not open dest file %s: %s\n",
+                 __FUNCTION__, filestate->dst, dpl_status_str(dplret));
         goto err;
     }
 
@@ -135,8 +126,8 @@ transfer_file(struct cloudmig_ctx* ctx,
     dplret = dpl_close(cb_data.hfile);
     if (dplret != DPL_SUCCESS)
     {
-        PRINTERR("%s: Could not close destination file %s in bucket %s : %s\n",
-                 __FUNCTION__, filestate->name, dstbucket,
+        PRINTERR("%s: Could not close destination file %s: %s\n",
+                 __FUNCTION__, filestate->dst,
                  dpl_status_str(dplret));
     }
 
@@ -156,44 +147,34 @@ transfer_file(struct cloudmig_ctx* ctx,
                  filestate->name);
 
 err:
-    ctx->dest_ctx->cur_bucket = bucket_dstctx;
-    ctx->src_ctx->cur_bucket = bucket_srcctx;
 
     return ret;
 }
 
+
 int
 create_directory(struct cloudmig_ctx* ctx,
-                 struct file_transfer_state* filestate,
-                 char* srcbucket,
-                 char* dstbucket)
+                 struct file_transfer_state* filestate)
 { 
     int             ret = EXIT_FAILURE;
     dpl_status_t    dplret = DPL_SUCCESS;
-    char*           bck_srcctx = ctx->src_ctx->cur_bucket;
-    char*           bck_dstctx = ctx->dest_ctx->cur_bucket;
-
 
     cloudmig_log(INFO_LVL,
-                 "[Migrating] : file '%s' is a directory : creating...\n",
+                 "[Migrating] : file '%s' is a directory : creating dest dir...\n",
                  filestate->name);
-
-    ctx->dest_ctx->cur_bucket = dstbucket;
-    ctx->src_ctx->cur_bucket  = srcbucket;
 
     /* 
      * FIXME : WORKAROUND : replace the last slash by a nul char
      * Since the dpl_mkdir function seems to fail when the last char is a slash
      */
-    filestate->name[strlen(filestate->name) - 1] = 0;
-    dplret = dpl_mkdir(ctx->dest_ctx, filestate->name);
-    filestate->name[strlen(filestate->name)] = '/';
+    filestate->dst[strlen(filestate->dst) - 1] = 0;
+    dplret = dpl_mkdir(ctx->dest_ctx, filestate->dst);
+    filestate->dst[strlen(filestate->dst)] = '/';
     // TODO FIXME With correct attributes
     if (dplret != DPL_SUCCESS)
     {
-        PRINTERR("%s: Could not create destination dir '%s' in bucket %s: %s\n",
-                 __FUNCTION__, filestate->name, dstbucket,
-                 dpl_status_str(dplret));
+        PRINTERR("%s: Could not create destination dir '%s': %s\n",
+                 __FUNCTION__, filestate->dst, dpl_status_str(dplret));
         goto end;
     }
 
@@ -203,11 +184,9 @@ create_directory(struct cloudmig_ctx* ctx,
 
     cloudmig_log(INFO_LVL,
                  "[Migrating] : directory '%s' successfully created !\n",
-                 filestate->name);
+                 filestate->dst);
 
 end:
-    ctx->dest_ctx->cur_bucket = bck_dstctx;
-    ctx->src_ctx->cur_bucket = bck_srcctx;
 
     return ret;
 }

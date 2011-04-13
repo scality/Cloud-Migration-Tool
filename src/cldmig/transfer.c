@@ -43,16 +43,14 @@ get_migrating_file_type(struct file_transfer_state* filestate)
 
 static int
 migrate_object(struct cloudmig_ctx* ctx,
-              struct file_transfer_state* filestate,
-              char* srcbucket,
-              char* dstbucket)
+              struct file_transfer_state* filestate)
 {
     int     failures = 0;
     int     ret = EXIT_FAILURE;
 
     cloudmig_log(DEBUG_LVL,
-"[Migrating] : starting migration of file %s from bucket %s to bucket %s.\n",
-                 filestate->name, srcbucket, dstbucket);
+                 "[Migrating] : starting migration of file %s to %s.\n",
+                 filestate->name, filestate->dst);
 
     /*
      * First init the thread's internal data
@@ -67,7 +65,7 @@ retry:
     switch (get_migrating_file_type(filestate))
     {
     case DPL_FTYPE_DIR:
-        ret = create_directory(ctx, filestate, srcbucket, dstbucket);
+        ret = create_directory(ctx, filestate);
         if (ret != EXIT_SUCCESS)
         {
             if (++failures < 3)
@@ -84,7 +82,7 @@ retry:
         }
         break ;
     case DPL_FTYPE_REG:
-        ret = transfer_file(ctx, filestate, srcbucket, dstbucket);
+        ret = transfer_file(ctx, filestate);
         if (ret != EXIT_SUCCESS)
         {
             if (++failures < 3)
@@ -105,11 +103,11 @@ retry:
                  __FUNCTION__, filestate->name);
         break ;
     }
-    status_update_entry(ctx, filestate, srcbucket, filestate->fixed.size);
+    status_update_entry(ctx, filestate, filestate->fixed.size);
 
     cloudmig_log(INFO_LVL,
-    "[Migrating] : file %s from bucket %s migrated to dest bucket %s.\n",
-                 filestate->name, srcbucket, dstbucket);
+    "[Migrating] : file %s migrated to %s.\n",
+                 filestate->name, filestate->dst);
 
 ret:
     /*
@@ -135,32 +133,28 @@ static int
 migrate_loop(struct cloudmig_ctx* ctx)
 {
     unsigned int                ret = EXIT_FAILURE;
-    struct file_transfer_state  cur_filestate = {{0, 0, 0}, NULL, 0, 0};
-    char*                       srcbucket = NULL;
-    char*                       dstbucket = NULL;
+    struct file_transfer_state  cur_filestate = {{0, 0, 0}, NULL, NULL, 0, 0};
     size_t                      nbfailures = 0;
 
     // The call allocates the buffer for the bucket, so we must free it
     // The same goes for the cur_filestate's name field.
-    while ((ret = status_next_incomplete_entry(ctx, &cur_filestate,
-                                               &srcbucket, &dstbucket))
+    while ((ret = status_next_incomplete_entry(ctx, &cur_filestate))
            == EXIT_SUCCESS)
     {
         if (migrate_object(ctx, &cur_filestate, srcbucket, dstbucket))
             ++nbfailures;
 
         // Clean up datas...
-        free(srcbucket);
-        srcbucket = NULL;
-        dstbucket = NULL; // this one is not allocated for us (Copied pointer).
         free(cur_filestate.name);
+        free(cur_filestate.dst);
         cur_filestate.name = NULL;
+        cur_filestate.dst= NULL;
     }
 
-    if (srcbucket)
-        free(srcbucket);
     if (cur_filestate.name)
         free(cur_filestate.name);
+    if (cur_filestate.dst)
+        free(cur_filestate.dst);
 
     return (ret == ENODATA ? nbfailures : ret);
 }

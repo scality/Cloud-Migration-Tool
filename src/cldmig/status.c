@@ -182,9 +182,7 @@ end:
  * 
  */
 int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
-                                 struct file_transfer_state* filestate,
-                                 char **srcbucket,
-                                 char **dstbucket)
+                                 struct file_transfer_state* filestate)
 {
     assert(ctx != NULL);
     assert(ctx->status.bucket_name != NULL);
@@ -238,33 +236,34 @@ int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
                 // Next, save the data allowing to find back this entry
                 filestate->state_idx = i;
                 filestate->offset = bucket_state->next_entry_off;
-                // Copy the pointer of the dest bucket name
-                *dstbucket = bucket_state->dest_bucket;
-                // Use pointer arithmetics to get the name after the fste
-                filestate->name = strdup((char*)(fste+1));
-                if (filestate->name == NULL)
+
+                // Find the ".cloudmig" in order to isolate the bucket's name
+                // Not checked since the filename should always be a .cloudmig
+                char* buckname_end = strrchr(bucket_state->filename, '.');
+                // compute the whole filename in the form  srcbucket:filename
+                if (asprintf(&filestate->name, "%.*s:/%s",
+                             (int)(buckname_end - bucket_state->filename),
+                             bucket_state->filename, (char*)(fste+1)) == -1)
                 {
-                    PRINTERR("%s: could not copy file name : %s",
+                    filestate->name = NULL;
+                    PRINTERR("%s: could not compute src file name : %s",
                              __FUNCTION__, strerror(errno));
                     goto err;
                 }
-                
 
-                // Second : Copy the bucket status file name and truncate it
-                if ((*srcbucket = strdup(bucket_state->filename)) == NULL)
+                // compute the whole filename in the form  dstbucket:filename
+                if (asprintf(&filestate->dst, "%s:/%s",
+                             bucket_state->dest_bucket, (char*)(fste+1)) == -1)
                 {
-                    PRINTERR("%s: could not allocate memory: %s",
+                    filestate->dst = NULL;
+                    PRINTERR("%s: could not compute dest file name : %s",
                              __FUNCTION__, strerror(errno));
                     goto err;
                 }
-                // Cut the string at the ".cloudmig" part to get the bucket
-                // Here the filename is valid, so it should never crash :
-                *(strrchr(*srcbucket, '.')) = '\0';
 
-                cloudmig_log(DEBUG_LVL,
+                cloudmig_log(WARN_LVL,
                 "[Migrating]: Found an incompletely transfered file :"
-                " '%s' from bucket '%s' to bucket '%s'...\n",
-                filestate->name, *srcbucket, *dstbucket);
+                " '%s' to '%s'...\n", filestate->name, filestate->dst);
 
                 // For the threading :
                 // Reference counter over the use of the buffer, in order
@@ -314,14 +313,14 @@ err:
         free(filestate->name);
         filestate->name = NULL;
     }
+    if (filestate->dst)
+    {
+        free(filestate->dst);
+        filestate->dst = NULL;
+    }
     filestate->fixed.size = 0;
     filestate->fixed.offset = 0;
     filestate->fixed.namlen = 0;
-    if (*srcbucket)
-    {
-        free(*srcbucket);
-        *srcbucket = NULL;
-    }
 
     return ret;
 }
@@ -333,7 +332,6 @@ err:
  */
 int		status_update_entry(struct cloudmig_ctx *ctx,
                             struct file_transfer_state *fst,
-                            char *bucket,
                             int32_t done_offset)
 {
     int             ret = EXIT_FAILURE;
@@ -345,8 +343,8 @@ int		status_update_entry(struct cloudmig_ctx *ctx,
     struct transfer_state   *bst = &ctx->status.bucket_states[fst->state_idx];
 
     cloudmig_log(INFO_LVL,
-"[Updating status]: File %s from bucket %s done up to %li/%li bytes.\n",
-                 fst->name, bucket, done_offset, fst->fixed.size);
+        "[Updating status]: File %s done up to %li/%li bytes.\n",
+        fst->name, done_offset, fst->fixed.size);
     
     if (bst->buf == NULL)
     {
@@ -382,15 +380,13 @@ int		status_update_entry(struct cloudmig_ctx *ctx,
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not write buffer to status file %s for updating.\n",
-                 __FUNCTION__);
+                 __FUNCTION__, bst->filename);
         goto end;
     }
     dpl_close(hfile);
     hfile = NULL;
 
-    cloudmig_log(DEBUG_LVL,
-                 "[Updating status]: File %s from bucket %s updated.\n",
-                 fst->name, ctx->status.bucket_name);
+    cloudmig_log(DEBUG_LVL, "[Updating status]: File %s updated.\n", fst->name);
 
     // TODO Lock bst
     bst->use_count -= 1;
