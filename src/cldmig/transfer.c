@@ -120,7 +120,7 @@ ret:
     ctx->tinfos[0].fname = NULL;
     clear_list((struct cldmig_transf**)(&(ctx->tinfos[0].infolist)));
     // XXX Unlock it
-    return (failures < 3);
+    return (failures == 3);
 }
 
 

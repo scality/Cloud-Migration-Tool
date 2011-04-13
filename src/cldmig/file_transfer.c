@@ -116,9 +116,8 @@ transfer_file(struct cloudmig_ctx* ctx,
                           NULL); // metadatap
     if (dplret != DPL_SUCCESS)
     {
-        PRINTERR("%s: Could not open source file %s in bucket %s : %s\n",
-                 __FUNCTION__, filestate->name, srcbucket,
-                 dpl_status_str(dplret));
+        PRINTERR("%s: Could not open source file %s: %s\n",
+                 __FUNCTION__, filestate->name, dpl_status_str(dplret));
         goto err;
     }
 

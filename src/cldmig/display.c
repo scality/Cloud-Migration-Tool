@@ -255,7 +255,7 @@ cloudmig_update_client(struct cloudmig_ctx *ctx)
             make_list_transfer_rate(
                 (struct cldmig_transf*)(ctx->tinfos[threadid].infolist)
             ),
-            ctx->tinfos[threadid].fnamlen
+            strlen(ctx->tinfos[threadid].fname) + 1
         };
 
         // Write the struct
@@ -267,7 +267,7 @@ cloudmig_update_client(struct cloudmig_ctx *ctx)
         // Write the filename
         if (send(ctx->viewer_fd,
               ctx->tinfos[threadid].fname,
-              ctx->tinfos[threadid].fnamlen, MSG_NOSIGNAL) == -1)
+              tinfo.namlen, MSG_NOSIGNAL) == -1)
             goto unset_viewer_fd;
         // We're done with this thread !
         // XXX Unlock the thread's info
