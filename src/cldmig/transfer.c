@@ -141,7 +141,7 @@ migrate_loop(struct cloudmig_ctx* ctx)
     while ((ret = status_next_incomplete_entry(ctx, &cur_filestate))
            == EXIT_SUCCESS)
     {
-        if (migrate_object(ctx, &cur_filestate, srcbucket, dstbucket))
+        if (migrate_object(ctx, &cur_filestate))
             ++nbfailures;
 
         // Clean up datas...
