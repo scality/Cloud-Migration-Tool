@@ -84,18 +84,22 @@ transfer_file(struct cloudmig_ctx* ctx,
     int                     ret = EXIT_FAILURE;
     dpl_status_t            dplret;
     struct data_transfer    cb_data = { .hfile=NULL, .ctx=ctx };
+    dpl_canned_acl_t        can_acl;
 
     cloudmig_log(INFO_LVL,
     "[Migrating] : file '%s' is a regular file : starting transfer...\n",
     filestate->name);
 
+
     /*
-     * First, open the destination file for writing.
+     * First, open the destination file for writing, after
+     * retrieving the source file's canned acl.
      */
+    can_acl = get_file_canned_acl(ctx->src_ctx, filestate->name);
     dplret = dpl_openwrite(ctx->dest_ctx, filestate->dst,
                            DPL_VFILE_FLAG_CREAT,
                            NULL, // metadata
-                           DPL_CANNED_ACL_PRIVATE,
+                           can_acl,
                            filestate->fixed.size,
                            &cb_data.hfile);
     if (dplret != DPL_SUCCESS)
