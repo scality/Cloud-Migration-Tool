@@ -29,8 +29,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+// The series of global indexes to be used for the colors.
+// The last color, white is at idx 7 by default
+static short       darkyellow_idx  = -1;
+static short       lightred_idx    = -1;
+static short       lightgreen_idx  = -1;
 
-// Those a global data for restorating the colors and pairs
+short       progressbar_idx = 1;
+short       errormsg_idx    = 2;
+short       confirmmsg_idx  = 3;
+
+// Those are global data for restorating the colors and pairs
 // to the original values
 static short colors[3][3] = {
     {0, 0, 0},
@@ -64,16 +73,10 @@ viewer_save_original_colors(void)
 int
 viewer_init_colors(void)
 {
-    // The last color, white is at idx 7 by default
-    short       darkyellow_idx  = COLORS-1,
-                lightred_idx    = COLORS-2,
-                lightgreen_idx  = COLORS-3,
-                progressbar_idx = 1,
-                errormsg_idx    = 2,
-                confirmmsg_idx  = 3;
-
+    darkyellow_idx  = COLORS-1;
+    lightred_idx    = COLORS-2;
+    lightgreen_idx  = COLORS-3;
     viewer_save_original_colors();
-
     if (init_color(darkyellow_idx, 1000, 600, 000) == ERR)
     {
         fprintf(stderr,

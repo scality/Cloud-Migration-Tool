@@ -43,3 +43,8 @@ void    display(struct cldmig_global_info *ginfo,
 struct tool_instance    *get_instance_list(void);
 void                    clear_instance_list(struct tool_instance *list);
 
+
+// The global indexes to be used for the colors.
+extern short       progressbar_idx;
+extern short       errormsg_idx;
+extern short       confirmmsg_idx;
