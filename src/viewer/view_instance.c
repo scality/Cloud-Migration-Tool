@@ -107,7 +107,7 @@ state_machine_read(int sockfd, struct cldmig_global_info *ginfo,
             {
                 uint32_t n = *thr_nb;
                 *thr_nb = thr_id + 1;
-                *thr_data = realloc(*thr_data, *thr_nb);
+                *thr_data = realloc(*thr_data, (*thr_nb) * sizeof(**thr_data));
                 // Let's bzero the newly allocated data
                 bzero(*thr_data + n, ((*thr_nb) - n) * sizeof(**thr_data));
             }
@@ -213,8 +213,8 @@ view_instance(const char *path)
     int         ret = EXIT_FAILURE;
     int         lockfd = -1;
     int         sockfd = -1;
-    char        *lockpath;
-    char        *sockpath;
+    char        *lockpath = NULL;
+    char        *sockpath = NULL;
 
     lockpath = strdup(path);
     if (lockpath == NULL)
