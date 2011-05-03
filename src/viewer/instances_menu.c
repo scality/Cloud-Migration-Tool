@@ -96,6 +96,7 @@ main_menu(void)
 	MENU                    *my_menu = NULL;
  	ITEM                    **my_items = NULL;
     struct tool_instance    *list = NULL;
+    const char              *ret_msg = NULL;
     // Init at refresh for first loop.
     int                     c = 'R';
 
@@ -114,12 +115,16 @@ main_menu(void)
             break ;
         // Select a migration to monitor
         case ' ':
-        case 10:
+        case 13: // Enter key
             {
                 if (item_count(my_menu) > 0)
                 {
                     ITEM *curitem = current_item(my_menu);
-                    view_instance(item_description(curitem));
+                    if (view_instance(item_description(curitem))
+                        != EXIT_SUCCESS)
+                    {
+        ret_msg = "An error occured while trying to display the tool's data.";
+                    }
                 }
             }
             // No break here to allow refreshing the list
@@ -154,7 +159,11 @@ main_menu(void)
                  "    <q> or <Q> to quit this program.");
         mvprintw(LINES - 2, 0,
                  "    <r> or <R> to see refresh the list manually.");
-        mvprintw(LINES -6, 0, "Key = %i", c);
+        if (ret_msg)
+        {
+            mvprintw(LINES -6, 0, "%.*s", COLS, ret_msg);
+            ret_msg = NULL;
+        }
         refresh();
     } while ((c = getch()) != 'q');
 

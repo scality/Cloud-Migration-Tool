@@ -187,7 +187,8 @@ display_loop(int sockfd)
         if (FD_ISSET(sockfd, &rfds))
         {
             state_machine_read(sockfd, &ginfos, &thr_data, &nb_threads);
-            display(&ginfos, thr_data, nb_threads, msgs);
+            if (display(&ginfos, thr_data, nb_threads, msgs) == EXIT_FAILURE)
+                goto err;
         }
     } while (!stop);
 

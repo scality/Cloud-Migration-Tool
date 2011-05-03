@@ -102,13 +102,13 @@ get_eta(uint64_t done, uint64_t total, uint32_t byterate)
     return (str);
 }
 
-static void
+static int
 print_global_line(uint64_t bdone, uint64_t btotal,
                   uint64_t done_obj, uint64_t nb_obj,
                   uint64_t byterate)
 {
+    int     ret = EXIT_FAILURE;
     char    *stats = NULL;
-    char    *eta_str = get_eta(bdone, btotal, byterate);
     char    *msg = NULL;
     // nb of highlighted chars of the progress bar.
     int     nbhighlight = bdone * COLS / btotal;
@@ -119,9 +119,12 @@ print_global_line(uint64_t bdone, uint64_t btotal,
         get_size_order(btotal,   &sz_str[1]),
         get_size_order(byterate, &sz_str[2])
     };
+    char    *eta_str = get_eta(bdone, btotal, byterate);
+    if (eta_str == NULL)
+        return EXIT_FAILURE;
 
-    asprintf(&stats,
-             "%llu/%llu objects (%.2f%s/%.2f%s)  %.2f%s/s  %s",
+    ret = asprintf(&stats,
+             " %llu/%llu objects (%.2f%s/%.2f%s)  %.2f%s/s  %s",
              done_obj, nb_obj,
              float_values[0], sz_str[0],
              float_values[1], sz_str[1],
@@ -129,30 +132,39 @@ print_global_line(uint64_t bdone, uint64_t btotal,
              eta_str);
     free(eta_str);
     eta_str = NULL;
+    if (ret == -1)
+        return EXIT_FAILURE;
+
     // Printf the whole line into a printable string
-    asprintf(&msg, "%s%*s", "GLOBAL STATS", COLS - 12, stats);
+    ret = asprintf(&msg, "%s%*s", "GLOBAL STATS", COLS - 12, stats);
     free(stats);
     stats = NULL;
+    if (ret == -1)
+        return EXIT_FAILURE;
 
     attron(COLOR_PAIR(progressbar_idx));
     mvprintw(0, 0, "%.*s", nbhighlight, msg);
     attroff(COLOR_PAIR(progressbar_idx));
-    mvprintw(0, nbhighlight, "%s", &msg[nbhighlight]);
+    mvprintw(0, nbhighlight, "%.*s", COLS-nbhighlight, &msg[nbhighlight]);
     free(msg);
+    return EXIT_SUCCESS;
 }
 
 
-static void
+static int
 print_line(int thread_id, char *fname,
            uint32_t bdone, uint32_t btotal, uint32_t byterate)
 {
+    int     ret = EXIT_SUCCESS;
     char    *stats = NULL;
     char    *tmp_str = NULL;
     char    *msg = NULL;
+    int     statlen = 0;
+    int     tmplen = 0;
     if (btotal == 0)
     {
         mvprintw(thread_id + 2, 0, "Thread[%i] : inactive...", thread_id);
-        return ;
+        return EXIT_SUCCESS;
     }
     // nb of highlighted chars of the progress bar.
     int     nbhighlight = bdone * COLS / btotal;
@@ -164,52 +176,69 @@ print_line(int thread_id, char *fname,
         get_size_order(byterate, &sz_str[2])
     };
 
-    asprintf(&stats, "%.2f%s/%.2f%s  %.2f%s/s",
+    ret = asprintf(&stats, " %.2f%s/%.2f%s  %.2f%s/s",
              float_values[0], sz_str[0],
              float_values[1], sz_str[1],
              float_values[2], sz_str[2]);
+    if (ret == -1)
+        return EXIT_FAILURE;
 
-    asprintf(&tmp_str, "Thread[%i] : %s", thread_id, fname);
+    ret = asprintf(&tmp_str, "Thread[%i] : %s", thread_id, fname);
+    if (ret == -1)
+    {
+        free(stats);
+        return EXIT_FAILURE;
+    }
     // Printf the whole line into a printable string
-    asprintf(&msg, "%s%*s", tmp_str, COLS - strlen(tmp_str), stats);
+    tmplen = strlen(tmp_str);
+    statlen = strlen(stats);
+    ret = asprintf(&msg, "%.*s%s%*s",
+                   tmplen + statlen > COLS ?  COLS-statlen-3 : COLS-statlen,
+                   tmp_str,
+                   tmplen + statlen > COLS ? "..." : "",
+                   tmplen + statlen > COLS ? 0 : COLS - tmplen,
+                   stats);
     free(stats);
-    stats = NULL;
     free(tmp_str);
-    tmp_str = NULL;
+    if (ret == -1)
+        return EXIT_FAILURE;
 
     attron(COLOR_PAIR(progressbar_idx));
     mvprintw(thread_id + 2, 0, "%.*s", nbhighlight, msg);
     attroff(COLOR_PAIR(progressbar_idx));
     mvprintw(thread_id + 2, nbhighlight, "%s", &msg[nbhighlight]);
     free(msg);
+    return EXIT_SUCCESS;
 }
 
 
-void
+int
 display(struct cldmig_global_info *ginfo,
         struct thread_info* thr_data, uint32_t thr_nb,
         struct message* msgs)
 {
+    int         ret;
     uint64_t    total_byterate = 0;
     uint64_t    added_done = 0;
+
     for (uint32_t i=0; i < thr_nb; ++i)
     {
         total_byterate += thr_data[i].byterate;
         added_done += thr_data[i].sz_done;
     }
-    print_global_line(ginfo->done_sz + added_done, ginfo->total_sz,
-                      ginfo->done_objects, ginfo->nb_objects,
-                      total_byterate);
+    ret = print_global_line(ginfo->done_sz + added_done, ginfo->total_sz,
+                            ginfo->done_objects, ginfo->nb_objects,
+                            total_byterate);
+    if (ret == EXIT_FAILURE)
+        return EXIT_FAILURE;
 
     for (uint32_t i =0; i < thr_nb; ++i)
     {
-        print_line(i, thr_data[i].name,
-                   thr_data[i].sz_done, thr_data[i].size,
-                   thr_data[i].byterate);
-        /*mvprintw(line++, 0,
-                 "Thread[%i][%s] : %u/%u bytes, speed: %u byte per second.",
-                 i, thr_data[i].name, thr_data[i].sz_done,
-                 thr_data[i].size, thr_data[i].byterate);*/
+        ret = print_line(i, thr_data[i].name,
+                         thr_data[i].sz_done, thr_data[i].size,
+                         thr_data[i].byterate);
+        if (ret == EXIT_FAILURE)
+            return EXIT_FAILURE;
     }
 
     if (msgs)
@@ -219,4 +248,5 @@ display(struct cldmig_global_info *ginfo,
                  msgs->type ? "HAS_MSG_TYPE" : "HAS_NO_MSG_TYPE", msgs->msg);*/
     }
     refresh();
+    return EXIT_SUCCESS;
 }

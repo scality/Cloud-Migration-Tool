@@ -35,7 +35,7 @@ int     viewer_init_colors(void);
 void    viewer_restore_colors(void);
 int     main_menu(void);
 int     view_instance(const char *path);
-void    display(struct cldmig_global_info *ginfo,
+int     display(struct cldmig_global_info *ginfo,
                 struct thread_info* thr_data, uint32_t thr_nb,
                 struct message* msgs);
 
