@@ -206,7 +206,8 @@ print_line(int thread_id, char *fname,
     attron(COLOR_PAIR(progressbar_idx));
     mvprintw(thread_id + 2, 0, "%.*s", nbhighlight, msg);
     attroff(COLOR_PAIR(progressbar_idx));
-    mvprintw(thread_id + 2, nbhighlight, "%s", &msg[nbhighlight]);
+    mvprintw(thread_id + 2, nbhighlight, "%.*s",
+             COLS-nbhighlight, &msg[nbhighlight]);
     free(msg);
     return EXIT_SUCCESS;
 }
