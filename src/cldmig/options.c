@@ -82,7 +82,7 @@ int retrieve_opts(int argc, char* argv[])
 //      {"config",          required_argument,  0, 'c'},
         /* Status-related options           */
 //      {"ignore-status",   no_argument,        0, 'i'},
-//      {"force-resume",    no_argument,        0, 'r'},
+        {"force-resume",    no_argument,        0, 'r'},
         /* Behavior-related options         */
         {"delete-source",   no_argument,        0, 0},
         /* Verbose/Log-related options      */
@@ -92,7 +92,7 @@ int retrieve_opts(int argc, char* argv[])
     };
 
     while ((cur_opt = getopt_long(argc, argv,
-                                  "-s:d:v",
+                                  "-s:d:vr",
                                   long_options, &option_index)) != -1)
     {
         switch (cur_opt)
@@ -146,6 +146,9 @@ int retrieve_opts(int argc, char* argv[])
                 return (EXIT_FAILURE);
             }
             gl_options->dest_profile = optarg;
+            break ;
+        case 'r':
+            gl_options->flags |= RESUME_MIGRATION;
             break ;
 /*
         case 'i':

@@ -31,6 +31,7 @@
 #include <unistd.h>
 
 #include "cloudmig.h"
+#include "options.h"
 
 /*
  *
@@ -149,8 +150,19 @@ int load_status(struct cloudmig_ctx* ctx)
      * create the buckets states in order to be able
      * to follow the states evolutions.
      */
-    if (status_retrieve_states(ctx))
+    if (resuming == 0
+        || gl_options->flags & RESUME_MIGRATION)
+    {
+        if (status_retrieve_states(ctx))
+            goto err;
+    }
+    else
+    {
+        cloudmig_log(ERR_LVL, "[Loading Status]: Could not create status:"
+                     "Ongoing migration for this configuration.\n"
+                     "Please use --force-resume option\n");
         goto err;
+    }
 
     cloudmig_log(INFO_LVL, "[Loading Status]: Status loading"
                  " done with success.\n");

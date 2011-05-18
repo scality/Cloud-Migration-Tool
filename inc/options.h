@@ -32,9 +32,10 @@ enum cloudmig_flags
     SRC_PROFILE_NAME    = 1 << 0,
     DEST_PROFILE_NAME   = 1 << 1,
     IGNORE_STATUS       = 1 << 2,
-    DEBUG               = 1 << 3,
-    QUIET               = 1 << 4,
-    DELETE_SOURCE_DATA  = 1 << 5,
+    RESUME_MIGRATION    = 1 << 3,
+    DEBUG               = 1 << 4,
+    QUIET               = 1 << 5,
+    DELETE_SOURCE_DATA  = 1 << 6,
 };
 
 struct cloudmig_options
