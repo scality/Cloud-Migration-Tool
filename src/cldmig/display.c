@@ -211,10 +211,16 @@ cloudmig_update_client(struct cloudmig_ctx *ctx)
     if (ctx->viewer_fd == -1)
         return ;
 
-    // TODO : Check that lastupdate was done at least 1/4 sec before
     gettimeofday(&tlimit, NULL);
-    if (((tlimit.tv_sec - lastupdate.tv_sec) * 1000000
-         + tlimit.tv_usec - lastupdate.tv_usec) < 250000)
+    // Update if :
+    //  - transfer fully done
+    //  OR
+    //  - last update was more than 1/4 sec ago
+    if (ctx->status.general.head.done_sz != ctx->status.general.head.total_sz
+        && (((double)tlimit.tv_sec * 1000.
+             + (double)tlimit.tv_usec/1000.)
+            - ((double)lastupdate.tv_sec * 1000.
+               + (double)lastupdate.tv_usec/1000.)) < 250)
         return ;
     lastupdate = tlimit; 
 
