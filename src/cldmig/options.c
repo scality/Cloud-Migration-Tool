@@ -100,11 +100,9 @@ int retrieve_opts(int argc, char* argv[])
         {
         case 0:
             // Manage all options without short equivalents :
-            fprintf(stderr, "Currently getting opt[%i]=%s\n",option_index,
-                    long_options[option_index].name);
             switch (option_index)
             {
-            case 2: // delete-source
+            case 3: // delete-source
                 gl_options->flags |= DELETE_SOURCE_DATA;
                 break ;
             }

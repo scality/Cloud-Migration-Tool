@@ -52,9 +52,12 @@ cloudmig_sighandler(int sig)
 
 int main(int argc, char* argv[])
 {
+    time_t  starttime = 0;
+    time_t  difftime = 0;
 	struct cloudmig_options options = {0, 0, 0, 0, 0, 0, 1};
 	gl_options = &options;
 
+    starttime = time(NULL);
     if (retrieve_opts(argc, argv) == EXIT_FAILURE)
         return (EXIT_FAILURE);
 
@@ -82,10 +85,35 @@ int main(int argc, char* argv[])
     if (load_status(&ctx) == EXIT_FAILURE)
         goto failure;
 
+    struct cloudmig_ctx ref = ctx;
+
     signal(SIGINT, &cloudmig_sighandler);
 
     if (migrate(&ctx) == EXIT_FAILURE)
         goto failure;
+
+    difftime = time(NULL);
+    difftime -= starttime;
+
+    ref.status.general.head.done_objects = ctx.status.general.head.done_objects
+        - ref.status.general.head.done_objects;
+    ref.status.general.head.done_sz = ctx.status.general.head.done_sz
+        - ref.status.general.head.done_sz;
+    cloudmig_log(INFO_LVL, "End of data migration. During this session :\n"
+        "Transfered %llu/%llu objects\n"
+        "Transfered %llu/%llu Bytes\n"
+        "Average transfer speed : %llu Bytes/s\n"
+        "Transfer Duration : %ud%uh%um%us\n",
+        ref.status.general.head.done_objects,
+        ref.status.general.head.nb_objects,
+        ref.status.general.head.done_sz,
+        ref.status.general.head.total_sz,
+        ref.status.general.head.done_sz / difftime,
+        difftime / (60 * 60 * 24),
+        difftime / (60 * 60) % 24,
+        difftime / 60 % 60,
+        difftime % 60
+    );
 
 	return (EXIT_SUCCESS);
 
