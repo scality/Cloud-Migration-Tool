@@ -81,21 +81,12 @@ int load_profiles(struct cloudmig_ctx* ctx)
     /*
      * If the debug option was given, let's activate every droplet traces.
      */
-    if (gl_options->flags & DEBUG)
+    if (gl_options->trace_flags != 0)
     {
         cloudmig_log(DEBUG_LVL,
-        "[Loading Profiles]: Activating droplet libary traces.\n");
-
-        ctx->src_ctx->trace_level =   DPL_TRACE_CONN | DPL_TRACE_IO
-                                    | DPL_TRACE_HTTP | DPL_TRACE_SSL
-                                    | DPL_TRACE_REQ  | DPL_TRACE_CONV
-                                    | DPL_TRACE_VDIR | DPL_TRACE_VFILE
-                                    | DPL_TRACE_BUF  ;
-        ctx->dest_ctx->trace_level =  DPL_TRACE_CONN | DPL_TRACE_IO
-                                    | DPL_TRACE_HTTP | DPL_TRACE_SSL
-                                    | DPL_TRACE_REQ  | DPL_TRACE_CONV
-                                    | DPL_TRACE_VDIR | DPL_TRACE_VFILE
-                                    | DPL_TRACE_BUF  ;
+                     "[Loading Profiles]: Activating droplet libary traces.\n");
+        ctx->src_ctx->trace_level = gl_options->trace_flags;
+        ctx->dest_ctx->trace_level = gl_options->trace_flags;
     }
 
     cloudmig_log(INFO_LVL,

@@ -52,13 +52,13 @@ cloudmig_sighandler(int sig)
 
 int main(int argc, char* argv[])
 {
-	struct cloudmig_options options = {0, 0, 0, 0, 0, 1};
+	struct cloudmig_options options = {0, 0, 0, 0, 0, 0, 1};
 	gl_options = &options;
 
-    if (retrieve_opts(argc, argv))
+    if (retrieve_opts(argc, argv) == EXIT_FAILURE)
         return (EXIT_FAILURE);
 
-    if (setup_var_pid_and_sock())
+    if (setup_var_pid_and_sock() == EXIT_FAILURE)
         return (EXIT_FAILURE);
 	
     struct cloudmig_ctx     ctx =
@@ -76,15 +76,15 @@ int main(int argc, char* argv[])
         goto failure;
     }
 
-    if (load_profiles(&ctx))
+    if (load_profiles(&ctx) == EXIT_FAILURE)
         goto failure;
 
-    if (load_status(&ctx))
+    if (load_status(&ctx) == EXIT_FAILURE)
         goto failure;
 
     signal(SIGINT, &cloudmig_sighandler);
 
-    if (migrate(&ctx))
+    if (migrate(&ctx) == EXIT_FAILURE)
         goto failure;
 
 	return (EXIT_SUCCESS);

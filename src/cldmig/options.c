@@ -87,6 +87,7 @@ int retrieve_opts(int argc, char* argv[])
         {"delete-source",   no_argument,        0, 0},
         /* Verbose/Log-related options      */
         {"verbose",         optional_argument,  0, 'v'},
+        {"droplet-trace",   required_argument,  0, 't'},
         /* Last element                     */
         {0, 0, 0, 0}
     };
@@ -150,6 +151,48 @@ int retrieve_opts(int argc, char* argv[])
         case 'r':
             gl_options->flags |= RESUME_MIGRATION;
             break ;
+        case 't':
+            while (*optarg)
+            {
+                switch (*optarg)
+                {
+                case 'n': // network = connexion
+                    gl_options->trace_flags |= DPL_TRACE_CONN;
+                    break ;
+                case 'i': // io
+                    gl_options->trace_flags |= DPL_TRACE_IO;
+                    break ;
+                case 'h': // http
+                    gl_options->trace_flags |= DPL_TRACE_HTTP;
+                    break ;
+                case 's': // ssl
+                    gl_options->trace_flags |= DPL_TRACE_SSL;
+                    break ;
+                case 'r': // req = requests
+                    gl_options->trace_flags |= DPL_TRACE_REQ;
+                    break ;
+                case 'c': // conv = droplet conv api
+                    gl_options->trace_flags |= DPL_TRACE_CONV;
+                    break ;
+                case 'd': // dir = droplet vdir api
+                    gl_options->trace_flags |= DPL_TRACE_VDIR;
+                    break ;
+                case 'f': // file = droplet vfile api
+                    gl_options->trace_flags |= DPL_TRACE_VFILE;
+                    break ;
+                case 'b': // buffers
+                    gl_options->trace_flags |= DPL_TRACE_BUF;
+                    break ;
+                default:
+                    cloudmig_log(ERR_LVL,
+                "Character %c is an invalid argument to droplet-trace option.\n"
+                "See manpage for more informations.\n", *optarg);
+                    return (EXIT_FAILURE);
+                    break ;
+                }
+                optarg++;
+            }
+            break;
 /*
         case 'i':
             gl_options->flags |= IGNORE_STATUS;

@@ -45,6 +45,7 @@ struct cloudmig_options
     int         is_dest_name;
     const char* dest_profile;
     int         flags;
+    int         trace_flags;
     int         nb_threads;
 };
 
