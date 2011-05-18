@@ -72,15 +72,46 @@ extern char* optarg;
  */
 int retrieve_opts(int argc, char* argv[])
 {
-    char cur_opt = 0;
-    while ((cur_opt = getopt(argc, argv, "-s:d:iqv")) != -1)
+    char                    cur_opt = 0;
+    int                     option_index = 0;
+    static struct option    long_options[] = {
+//      {name, has_arg, flag, returned_val}
+        /* Configuration-related options    */
+        {"src-profile",     required_argument,  0, 's'},
+        {"dst-profile",     required_argument,  0, 'd'},
+//      {"config",          required_argument,  0, 'c'},
+        /* Status-related options           */
+//      {"ignore-status",   no_argument,        0, 'i'},
+//      {"force-resume",    no_argument,        0, 'r'},
+        /* Behavior-related options         */
+        {"delete-source",   no_argument,        0, 0},
+        /* Verbose/Log-related options      */
+        {"verbose",         optional_argument,  0, 'v'},
+        /* Last element                     */
+        {0, 0, 0, 0}
+    };
+
+    while ((cur_opt = getopt_long(argc, argv,
+                                  "-s:d:v",
+                                  long_options, &option_index)) != -1)
     {
         switch (cur_opt)
         {
+        case 0:
+            // Manage all options without short equivalents :
+            fprintf(stderr, "Currently getting opt[%i]=%s\n",option_index,
+                    long_options[option_index].name);
+            switch (option_index)
+            {
+            case 2: // delete-source
+                gl_options->flags |= DELETE_SOURCE_DATA;
+                break ;
+            }
+            break ;
         case 1:
             /*
              * Then we are using non-options arguments.
-             * That should be a droplet profile name in the default profile path.
+             * That should be a droplet profile name in the default profile path
              */
             if (!gl_options->src_profile)
             {
@@ -116,12 +147,11 @@ int retrieve_opts(int argc, char* argv[])
             }
             gl_options->dest_profile = optarg;
             break ;
+/*
         case 'i':
             gl_options->flags |= IGNORE_STATUS;
             break ;
-        case 'q':
-            gl_options->flags |= QUIET;
-            break ;
+*/
         case 'v':
             gl_options->flags |= DEBUG;
             break ;

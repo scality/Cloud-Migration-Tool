@@ -29,19 +29,20 @@
 
 enum cloudmig_flags
 {
-    SRC_PROFILE_NAME    = 1,
+    SRC_PROFILE_NAME    = 1 << 0,
     DEST_PROFILE_NAME   = 1 << 1,
     IGNORE_STATUS       = 1 << 2,
     DEBUG               = 1 << 3,
     QUIET               = 1 << 4,
+    DELETE_SOURCE_DATA  = 1 << 5,
 };
 
 struct cloudmig_options
 {
     int         is_src_name;
-	const char* src_profile;
+    const char* src_profile;
     int         is_dest_name;
-	const char* dest_profile;
+    const char* dest_profile;
     int         flags;
     int         nb_threads;
 };

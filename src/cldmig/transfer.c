@@ -28,6 +28,7 @@
 #include <string.h>
 
 #include "cloudmig.h"
+#include "options.h"
 
 /*
  * Returns a value allowing to identify whether the file is
@@ -182,10 +183,9 @@ migrate(struct cloudmig_ctx* ctx)
     // Check if it was the end of the transfer by checking ret against 0
     if (ret == 0) // 0 == number of failures that occured.
     {
-        cloudmig_log(DEBUG_LVL, "Migration finished with success !\n");
-        // TODO FIXME XXX
-        // Then we have to remove the data from the source
-        delete_source(ctx);
+        cloudmig_log(INFO_LVL, "Migration finished with success !\n");
+        if (gl_options->flags & DELETE_SOURCE_DATA)
+            delete_source(ctx);
     }
     else
     {
