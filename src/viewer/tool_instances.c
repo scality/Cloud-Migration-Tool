@@ -30,6 +30,8 @@
 #include <curses.h>
 #include <dirent.h>
 #include <err.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -38,6 +40,35 @@
 
 #include "viewer.h"
 #include "tool_instances.h"
+
+static int
+get_transfer_description(char **desc, char *path)
+{
+    int ret = EXIT_FAILURE;
+    int len = strlen(path);
+    strcat(path, "/description.txt");
+    struct stat st;
+    if (stat(path, &st) == -1)
+        goto err;
+
+    int fd = open(path, O_RDONLY);
+    if (fd == -1)
+        goto err;
+
+    *desc = calloc(st.st_size+1, sizeof(*desc));
+    if (*desc == NULL)
+        return ENOMEM; // Mark the fact that it is a memory matter.
+    read(fd, *desc, st.st_size);
+
+    ret = EXIT_SUCCESS;
+
+err:
+    path[len] = '\0';
+    if (fd)
+        close(fd);
+
+    return ret;
+}
 
 struct tool_instance*
 get_instance_list(void)
@@ -49,11 +80,7 @@ get_instance_list(void)
 
     cldmig_dir = opendir("/tmp/cloudmig");
     if (cldmig_dir == NULL)
-    {
-        mvprintw(0, 0,
-                 "cloudmig-view: No cloudmig tool is running at the moment.\n");
         return NULL;
-    }
 
     while ((dir_entry = readdir(cldmig_dir)) != NULL)
     {
@@ -68,9 +95,21 @@ get_instance_list(void)
             continue ; //Discard and go to next...
 
         // Then theres only numbers in the dir name.
+        char*   desc = NULL;
         if (strlen(dir_entry->d_name)
             == strspn(dir_entry->d_name, "0123456789"))
         {
+            int ret = get_transfer_description(&desc, path);
+            if (ret == ENOMEM)
+            {
+                mvprintw(0, 0,
+                "cloudmig-view: Could not allocate memory.\n");
+                // Dont care about freeing allocated things,
+                // we'll exit soon enough
+                return NULL;
+            }
+            if (ret == EXIT_FAILURE)
+                continue ; // Discard element and goto next.
             struct tool_instance *e = calloc(1, sizeof(*e));
             if (e == NULL)
             {
@@ -89,7 +128,7 @@ get_instance_list(void)
                 // we'll exit soon enough
                 return NULL;
             }
-            e->process = e->dirpath + 14; // Only point on the PID in the path
+            e->desc = desc; // the tiny description of the migration
             e->next = b;
             b = e;
         }
@@ -109,6 +148,7 @@ clear_instance_list(struct tool_instance *list)
     {
         tmp = list;
         list = list->next;
+        free(tmp->desc);
         free(tmp->dirpath);
         free(tmp);
     }

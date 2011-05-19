@@ -84,20 +84,25 @@ create_log_socket(char * filename)
 void
 unsetup_var_pid_and_sock()
 {
+    char    path[64];
     shutdown(gl_accept_sock, SHUT_RDWR);
     close(gl_accept_sock);
 
     // For unlink, errors are not checked since other migrations may be running.
     unlink(gl_sockfile);
     gl_sockfile[strlen(gl_sockfile) - 12] = '\0'; // remove "display.sock"
+    strcpy(path, gl_sockfile);
+    strcat(path, "description.txt");
+    unlink(path);
     rmdir(gl_sockfile);
     rmdir("/tmp/cloudmig/");
 }
 
 int
-setup_var_pid_and_sock()
+setup_var_pid_and_sock(char *src, char *dst)
 {
     char    pid_str[32];
+    char    desc_file[64];
     // By using the size of sun_path, we seek to avoid buffer overflows in file
     // names.
     struct sockaddr_un t;
@@ -130,6 +135,13 @@ setup_var_pid_and_sock()
         }
         return (EXIT_FAILURE);
     }
+
+    snprintf(desc_file, sizeof(desc_file), "%s/description.txt", pid_str);
+    FILE* desc = fopen(desc_file, "w");
+    if (desc == NULL)
+        return EXIT_FAILURE;
+    fprintf(desc, "%s to %s", src, dst);
+    fclose(desc);
 
     snprintf(sockfile, sizeof(sockfile), "%s/display.sock",
              pid_str);

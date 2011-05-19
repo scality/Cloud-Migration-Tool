@@ -78,7 +78,7 @@ struct cloudmig_ctx
  * Required prototypes
  */
 int     retrieve_opts(int argc, char *argv[]);
-int     setup_var_pid_and_sock();
+int     setup_var_pid_and_sock(char *src, char *dst);
 int     load_profiles(struct cloudmig_ctx *ctx);
 int     load_status(struct cloudmig_ctx *ctx);
 int     status_next_incomplete_entry(struct cloudmig_ctx *ctx,

@@ -31,7 +31,7 @@ struct tool_instance
 {
     struct tool_instance    *next;
     char                    *dirpath;
-    char                    *process;
+    char                    *desc;
 };
 
 

@@ -61,9 +61,6 @@ int main(int argc, char* argv[])
     if (retrieve_opts(argc, argv) == EXIT_FAILURE)
         return (EXIT_FAILURE);
 
-    if (setup_var_pid_and_sock() == EXIT_FAILURE)
-        return (EXIT_FAILURE);
-	
     struct cloudmig_ctx     ctx =
         {
             NULL,
@@ -76,11 +73,15 @@ int main(int argc, char* argv[])
     if (ctx.tinfos == NULL)
     {
         PRINTERR("Could not allocate memory for transfer informations.", 0);
-        goto failure;
+        return (EXIT_FAILURE);
     }
 
     if (load_profiles(&ctx) == EXIT_FAILURE)
-        goto failure;
+        return (EXIT_FAILURE);
+
+    if (setup_var_pid_and_sock(ctx.src_ctx->host,
+                               ctx.dest_ctx->host) == EXIT_FAILURE)
+        return (EXIT_FAILURE);
 
     if (load_status(&ctx) == EXIT_FAILURE)
         goto failure;

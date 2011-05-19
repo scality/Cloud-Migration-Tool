@@ -60,7 +60,7 @@ fill_menu(struct tool_instance *list, ITEM ***items, MENU **menu)
     cur = list;
     for(int i = 0; i < listlen && cur != NULL; ++i, cur = cur->next)
     {
-        (*items)[i] = new_item(cur->process, cur->dirpath);
+        (*items)[i] = new_item(cur->desc, cur->dirpath);
         if ((*items)[i] == NULL)
         {
             fprintf(stderr, "cloudmig-view: Could not create menu item : %i.\n",
@@ -135,6 +135,9 @@ main_menu(void)
             if (list)
                 clear_instance_list(list);
             list = get_instance_list();
+            if (list == NULL)
+                mvprintw(0, 0,
+                "cloudmig-view: No cloudmig tool is running at the moment.\n");
 
             if (my_menu)
                 clear_menu(my_menu, my_items);
@@ -154,7 +157,7 @@ main_menu(void)
             break ;
         }
         mvprintw(LINES - 4, 0,
-                 "Use <SPACE> or <ENTER> to select the process to monitor.");
+             "Use <SPACE> or <ENTER> to select the process to monitor.");
         mvprintw(LINES - 3, 0,
                  "    <q> or <Q> to quit this program.");
         mvprintw(LINES - 2, 0,
