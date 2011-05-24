@@ -42,6 +42,8 @@ enum cloudmig_loglevel
     ERR_LVL
 };
 
+int  cloudmig_openlog(char* filename);
+void cloudmig_closelog(void);
 void cloudmig_log(enum cloudmig_loglevel lvl, const char* format, ...);
 
 #endif /* ! __CLOUDMIG_LOG_H__ */

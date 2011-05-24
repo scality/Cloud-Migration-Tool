@@ -41,12 +41,13 @@ enum cloudmig_flags
 struct cloudmig_options
 {
     int         is_src_name;
-    const char* src_profile;
     int         is_dest_name;
-    const char* dest_profile;
     int         flags;
     int         trace_flags;
     int         nb_threads;
+    const char  *src_profile;
+    const char  *dest_profile;
+    char        *logfile;
 };
 
 extern struct cloudmig_options* gl_options;

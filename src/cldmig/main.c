@@ -35,14 +35,16 @@ struct cloudmig_options *	gl_options = NULL;
 int                         gl_accept_sock = -1;
 char                        *gl_sockfile = NULL;
 
+
 void
 cloudmig_sighandler(int sig)
 {
     switch (sig)
     {
     case SIGINT:
-        printf("Interrupted by SINGINT... stopping.\n");
+        cloudmig_log(INFO_LVL, "Interrupted by SINGINT... stopping.\n");
         unsetup_var_pid_and_sock();
+        cloudmig_closelog();
         exit(EXIT_SUCCESS);
         break ;
     default:
@@ -54,12 +56,14 @@ int main(int argc, char* argv[])
 {
     time_t  starttime = 0;
     time_t  difftime = 0;
-	struct cloudmig_options options = {0, 0, 0, 0, 0, 0, 1};
+	struct cloudmig_options options = {0, 0, 0, 0, 1, 0, 0, 0};
 	gl_options = &options;
 
     starttime = time(NULL);
     if (retrieve_opts(argc, argv) == EXIT_FAILURE)
         return (EXIT_FAILURE);
+
+    cloudmig_openlog(options.logfile);
 
     struct cloudmig_ctx     ctx =
         {

@@ -24,14 +24,49 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
+#include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "cloudmig.h"
 
 enum cloudmig_loglevel gl_loglevel = INFO_LVL;
+static FILE* logstream = NULL;
+
+int cloudmig_openlog(char* filename)
+{
+    if (logstream)
+        return EXIT_FAILURE;
+
+    // If a filename is set, open it...
+    if (filename)
+        logstream = fopen(filename, "a+");
+    // Otherwise, use stderr (we may not be in background mode..)
+    else
+        logstream = stderr;
+    if (logstream == NULL)
+    {
+        fprintf(stderr,
+                "cloudmig: [ERR] Could not open file %s for logging : %s\n",
+                filename, strerror(errno));
+        return EXIT_FAILURE;
+    }
+    return EXIT_SUCCESS;
+}
+
+void cloudmig_closelog(void)
+{
+    if (logstream == NULL || logstream == stderr)
+    {
+        logstream = NULL;
+        return ;
+    }
+    fclose(logstream);
+    logstream = NULL;
+}
 
 void cloudmig_log(enum cloudmig_loglevel lvl, const char* format, ...)
 {
@@ -57,9 +92,9 @@ void cloudmig_log(enum cloudmig_loglevel lvl, const char* format, ...)
         default:
             break ;
         }
-        printf("cloudmig: [%s]", loglvl_str);
         va_start(args, format);
-        vprintf(format, args);
+        fprintf(logstream, "cloudmig: [%s]", loglvl_str);
+        vfprintf(logstream, format, args);
         va_end(args);
     }
 }

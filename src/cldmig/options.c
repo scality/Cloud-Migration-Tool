@@ -84,10 +84,11 @@ int retrieve_opts(int argc, char* argv[])
 //      {"ignore-status",   no_argument,        0, 'i'},
         {"force-resume",    no_argument,        0, 'r'},
         /* Behavior-related options         */
-        {"delete-source",   no_argument,        0, 0},
+        {"delete-source",   no_argument,        0,  0 },
         /* Verbose/Log-related options      */
         {"verbose",         optional_argument,  0, 'v'},
         {"droplet-trace",   required_argument,  0, 't'},
+        {"output",          required_argument,  0, 'o'},
         /* Last element                     */
         {0, 0, 0, 0}
     };
@@ -198,6 +199,9 @@ int retrieve_opts(int argc, char* argv[])
 */
         case 'v':
             gl_options->flags |= DEBUG;
+            break ;
+        case 'o':
+            gl_options->logfile = optarg;
             break ;
         default:
             // An error has already been printed by getopt...
