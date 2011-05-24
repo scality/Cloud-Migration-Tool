@@ -1,0 +1,68 @@
+################################################################################
+#
+#                       CLOUDMIG BUILDING INSTRUCTIONS
+#
+################################################################################
+
+I - Requirements
+
+a) Building Tools
+
+Two tools are required in order to build the tool :
+ - cmake (minimum version: 2.4)
+ - C compiler (support of the c99 standard needed)
+
+
+b) Library dependencies
+
+In order to build the cloud migration tool, you will need to have installed :
+ - libdroplet (depends on libXml2)
+ - libcurses
+
+
+
+II - Building the tool
+
+a) Setup using CMake
+
+As cmake searches and sets most of the information it needs, you may not have
+anything to setup beforehand if your cmake version is properly installed.
+
+In order to keep the source directory clean while building, we advice to create
+a build directory wherever you want. Then go into it and launch the cmake tool
+with the source directory root's path as an argument. Here is an example :
+
+$> pwd
+/home/$USER/downloads/cloudmig
+$> mkdir build
+$> cd build
+$> cmake ..
+
+
+If the cmake command outputs any error, then you may be missing a dependency.
+Read carefully cmake's output, and you should be able to understand which you
+are missing.
+
+
+b) Compiling the tool
+
+If the cmake tool did not output any error then the only thing left to do is
+to launch the make utility. Here's the example :
+
+$> pwd
+/home/$USER/downloads/cloudmig/build
+$> make
+
+The binary of both the tool(cloudmig) and its viewer(cloudmig-view) will be
+place in the bin/ directory of your build root.
+
+
+
+################################################################################
+#
+#                       CLOUDMIG INSTALLATION INSTRUCTIONS
+#
+################################################################################
+
+Nothing yet, since the tool cmake configuration does not have any install rules
+written yet.
