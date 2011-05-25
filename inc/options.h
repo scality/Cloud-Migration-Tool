@@ -36,6 +36,7 @@ enum cloudmig_flags
     DEBUG               = 1 << 4,
     QUIET               = 1 << 5,
     DELETE_SOURCE_DATA  = 1 << 6,
+    BACKGROUND_MODE     = 1 << 7,
 };
 
 struct cloudmig_options

@@ -24,8 +24,10 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
+#include <errno.h>
 #include <signal.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "cloudmig.h"
 #include "options.h"
@@ -62,6 +64,16 @@ int main(int argc, char* argv[])
     starttime = time(NULL);
     if (retrieve_opts(argc, argv) == EXIT_FAILURE)
         return (EXIT_FAILURE);
+
+    if (options.flags & BACKGROUND_MODE)
+    {
+        int pid = fork();
+        if (pid == -1)
+            PRINTERR(": Could not initiate background mode : %s\n",
+                     strerror(errno));
+        if (pid != 0) // The father quits.
+            return EXIT_SUCCESS;
+    }
 
     cloudmig_openlog(options.logfile);
 

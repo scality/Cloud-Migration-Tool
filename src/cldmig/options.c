@@ -207,6 +207,7 @@ int retrieve_opts(int argc, char* argv[])
         {"force-resume",    no_argument,        0, 'r'},
         /* Behavior-related options         */
         {"delete-source",   no_argument,        0,  0 },
+        {"background",      no_argument,        0,  0 },
         /* Verbose/Log-related options      */
         {"verbose",         optional_argument,  0, 'v'},
         {"droplet-trace",   required_argument,  0, 't'},
@@ -227,6 +228,11 @@ int retrieve_opts(int argc, char* argv[])
             {
             case 4: // delete-source
                 gl_options->flags |= DELETE_SOURCE_DATA;
+                break ;
+            case 5: // background mode
+                gl_options->flags |= BACKGROUND_MODE;
+                if (!gl_options->logfile)
+                    gl_options->logfile = "cloudmig.log";
                 break ;
             }
             break ;
