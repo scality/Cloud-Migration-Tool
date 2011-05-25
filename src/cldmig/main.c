@@ -56,6 +56,7 @@ cloudmig_sighandler(int sig)
 
 int main(int argc, char* argv[])
 {
+    int     ret = EXIT_FAILURE;
     time_t  starttime = 0;
     time_t  difftime = 0;
 	struct cloudmig_options options = {0, 0, 0, 0, 1, 0, 0, 0, 0, 0};
@@ -132,11 +133,9 @@ int main(int argc, char* argv[])
         difftime % 60
     );
 
-	return (EXIT_SUCCESS);
+	ret = EXIT_SUCCESS;
 
 failure:
     unsetup_var_pid_and_sock();
-
-
-	return (EXIT_FAILURE);
+	return (ret);
 }
