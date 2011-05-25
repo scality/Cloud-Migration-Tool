@@ -125,7 +125,7 @@ int main(int argc, char* argv[])
         ref.status.general.head.nb_objects,
         ref.status.general.head.done_sz,
         ref.status.general.head.total_sz,
-        ref.status.general.head.done_sz / difftime,
+        difftime == 0 ? 0 : ref.status.general.head.done_sz / difftime,
         difftime / (60 * 60 * 24),
         difftime / (60 * 60) % 24,
         difftime / 60 % 60,
