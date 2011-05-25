@@ -56,7 +56,7 @@ int main(int argc, char* argv[])
 {
     time_t  starttime = 0;
     time_t  difftime = 0;
-	struct cloudmig_options options = {0, 0, 0, 0, 1, 0, 0, 0};
+	struct cloudmig_options options = {0, 0, 0, 0, 1, 0, 0, 0, 0, 0};
 	gl_options = &options;
 
     starttime = time(NULL);

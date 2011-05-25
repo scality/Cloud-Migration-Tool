@@ -48,6 +48,8 @@ struct cloudmig_options
     const char  *src_profile;
     const char  *dest_profile;
     char        *logfile;
+    char        **src_buckets;
+    char        **dst_buckets;
 };
 
 extern struct cloudmig_options* gl_options;

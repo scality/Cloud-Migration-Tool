@@ -105,6 +105,7 @@ dpl_canned_acl_t    get_file_canned_acl(dpl_ctx_t* ctx, char *filename);
  */
 char*   compute_status_bucket(struct cloudmig_ctx *ctx);
 int     create_status(struct cloudmig_ctx *ctx, dpl_vec_t *buckets);
+int     create_buckets_status(struct cloudmig_ctx *ctx);
 int     status_retrieve_states(struct cloudmig_ctx* ctx);
 
 /*

@@ -36,7 +36,8 @@
 
 extern enum cloudmig_loglevel gl_loglevel;
 
-int cloudmig_options_check(void)
+static int
+cloudmig_options_check(void)
 {
     if (!gl_options->src_profile)
     {
@@ -61,6 +62,126 @@ int cloudmig_options_check(void)
     return (EXIT_SUCCESS);
 }
 
+static int
+opt_src_profile(void)
+{
+    if (gl_options->flags & SRC_PROFILE_NAME || gl_options->src_profile)
+    {
+        PRINTERR("Source profile already defined.\n", 0);
+        return (EXIT_FAILURE);
+    }
+    gl_options->src_profile = optarg;
+    return (EXIT_SUCCESS);
+}
+
+static int
+opt_dst_profile(void)
+{
+    if (gl_options->flags & DEST_PROFILE_NAME
+        || gl_options->dest_profile)
+    {
+        PRINTERR("Destination profile already defined.\n", 0);
+        return (EXIT_FAILURE);
+    }
+    gl_options->dest_profile = optarg;
+    return (EXIT_SUCCESS);
+}
+
+static int
+opt_trace(void)
+{
+    while (*optarg)
+    {
+        switch (*optarg)
+        {
+        case 'n': // network = connexion
+            gl_options->trace_flags |= DPL_TRACE_CONN;
+            break ;
+        case 'i': // io
+            gl_options->trace_flags |= DPL_TRACE_IO;
+            break ;
+        case 'h': // http
+            gl_options->trace_flags |= DPL_TRACE_HTTP;
+            break ;
+        case 's': // ssl
+            gl_options->trace_flags |= DPL_TRACE_SSL;
+            break ;
+        case 'r': // req = requests
+            gl_options->trace_flags |= DPL_TRACE_REQ;
+            break ;
+        case 'c': // conv = droplet conv api
+            gl_options->trace_flags |= DPL_TRACE_CONV;
+            break ;
+        case 'd': // dir = droplet vdir api
+            gl_options->trace_flags |= DPL_TRACE_VDIR;
+            break ;
+        case 'f': // file = droplet vfile api
+            gl_options->trace_flags |= DPL_TRACE_VFILE;
+            break ;
+        case 'b': // buffers
+            gl_options->trace_flags |= DPL_TRACE_BUF;
+            break ;
+        default:
+            PRINTERR(
+                "Character %c is an invalid argument to droplet-trace option.\n"
+                "See manpage for more informations.\n", *optarg);
+            return (EXIT_FAILURE);
+            break ;
+        }
+        optarg++;
+    }
+    return (EXIT_SUCCESS);
+}
+
+static int
+opt_buckets(void)
+{
+    char    *src;
+    char    *dst;
+    int     size = 0;
+    char    *next_semicolon = optarg;
+
+    while (optarg && *optarg)
+    {
+        // copy until the next ':' character.
+        src = strndup(optarg, strcspn(optarg, ":"));
+        dst = index(optarg, ':');
+        if (dst)
+        {
+            ++dst; // Jump over the ':'
+            // copy until the next semicolon (or end of string)
+            dst = strndup(dst, strcspn(dst, ";"));
+        }
+        next_semicolon = index(optarg, ';');
+        if (dst == NULL ||
+            *dst == 0 ||
+            (next_semicolon && dst > next_semicolon))
+        {
+            PRINTERR("The list of source/destination buckets is invalid.\n", 0);
+            return (EXIT_FAILURE);
+        }
+        // goto the first char of the dst bucket name
+        size += 1;
+        // Realloc src tab and set additional src.
+        gl_options->src_buckets = realloc(gl_options->src_buckets,
+                                         sizeof(*gl_options->src_buckets)
+                                          * (size + 1));
+        gl_options->src_buckets[size - 1] = src;
+        gl_options->src_buckets[size] = NULL;
+        // Realloc dst tab and set additional dst.
+        gl_options->dst_buckets = realloc(gl_options->dst_buckets,
+                                         sizeof(*gl_options->dst_buckets)
+                                          * (size + 1));
+        gl_options->dst_buckets[size - 1] = dst;
+        gl_options->dst_buckets[size] = NULL;
+        printf("Just got:\nsrc='%s'\ndst='%s'\n", src, dst);
+
+        optarg = next_semicolon;
+        if (optarg)
+            ++optarg; // jump over the semicolon.
+    }
+    return (EXIT_SUCCESS);
+}
 
 // global var used with getopt
 extern char* optarg;
@@ -79,6 +200,7 @@ int retrieve_opts(int argc, char* argv[])
         /* Configuration-related options    */
         {"src-profile",     required_argument,  0, 's'},
         {"dst-profile",     required_argument,  0, 'd'},
+        {"buckets",         required_argument,  0, 'b'},
 //      {"config",          required_argument,  0, 'c'},
         /* Status-related options           */
 //      {"ignore-status",   no_argument,        0, 'i'},
@@ -103,7 +225,7 @@ int retrieve_opts(int argc, char* argv[])
             // Manage all options without short equivalents :
             switch (option_index)
             {
-            case 3: // delete-source
+            case 4: // delete-source
                 gl_options->flags |= DELETE_SOURCE_DATA;
                 break ;
             }
@@ -130,73 +252,27 @@ int retrieve_opts(int argc, char* argv[])
             }
             break ;
         case 's':
-            if (gl_options->flags & SRC_PROFILE_NAME
-                || gl_options->src_profile)
-            {
-                PRINTERR("Source profile already defined.\n", 0);
+            if (opt_src_profile())
                 return (EXIT_FAILURE);
-            }
-            gl_options->src_profile = optarg;
             break ;
         case 'd':
-            if (gl_options->flags & DEST_PROFILE_NAME
-                || gl_options->dest_profile)
-            {
-                PRINTERR("Destination profile already defined.\n", 0);
+            if (opt_dst_profile())
                 return (EXIT_FAILURE);
-            }
-            gl_options->dest_profile = optarg;
+            break ;
+        case 'b':
+            if (opt_buckets())
+                return (EXIT_FAILURE);
             break ;
         case 'r':
             gl_options->flags |= RESUME_MIGRATION;
             break ;
         case 't':
-            while (*optarg)
-            {
-                switch (*optarg)
-                {
-                case 'n': // network = connexion
-                    gl_options->trace_flags |= DPL_TRACE_CONN;
-                    break ;
-                case 'i': // io
-                    gl_options->trace_flags |= DPL_TRACE_IO;
-                    break ;
-                case 'h': // http
-                    gl_options->trace_flags |= DPL_TRACE_HTTP;
-                    break ;
-                case 's': // ssl
-                    gl_options->trace_flags |= DPL_TRACE_SSL;
-                    break ;
-                case 'r': // req = requests
-                    gl_options->trace_flags |= DPL_TRACE_REQ;
-                    break ;
-                case 'c': // conv = droplet conv api
-                    gl_options->trace_flags |= DPL_TRACE_CONV;
-                    break ;
-                case 'd': // dir = droplet vdir api
-                    gl_options->trace_flags |= DPL_TRACE_VDIR;
-                    break ;
-                case 'f': // file = droplet vfile api
-                    gl_options->trace_flags |= DPL_TRACE_VFILE;
-                    break ;
-                case 'b': // buffers
-                    gl_options->trace_flags |= DPL_TRACE_BUF;
-                    break ;
-                default:
-                    PRINTERR(
-                "Character %c is an invalid argument to droplet-trace option.\n"
-                "See manpage for more informations.\n", *optarg);
-                    return (EXIT_FAILURE);
-                    break ;
-                }
-                optarg++;
-            }
+            if (opt_trace())
+                return (EXIT_FAILURE);
             break;
-/*
-        case 'i':
+/*      case 'i':
             gl_options->flags |= IGNORE_STATUS;
-            break ;
-*/
+            break ; */
         case 'v':
             gl_options->flags |= DEBUG;
             break ;

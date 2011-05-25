@@ -93,7 +93,7 @@ void cloudmig_log(enum cloudmig_loglevel lvl, const char* format, ...)
             break ;
         }
         va_start(args, format);
-        if (lvl == ERR_LVL)
+        if (lvl == ERR_LVL && logstream != stderr)
         {
             fprintf(stderr, "cloudmig: [%s]", loglvl_str);
             vfprintf(stderr, format, args);

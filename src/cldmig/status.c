@@ -137,7 +137,11 @@ int load_status(struct cloudmig_ctx* ctx)
     }
     if (resuming == 0)// Then we must build the new status file through
     {
-        if ((ret = create_status(ctx, src_buckets)))
+        if (gl_options->src_buckets)
+            ret = create_buckets_status(ctx);
+        else
+            ret = create_status(ctx, src_buckets);
+        if (ret == EXIT_FAILURE)
         {
             PRINTERR("%s: Could not create the migration's status.\n",
                      __FUNCTION__);
@@ -158,9 +162,9 @@ int load_status(struct cloudmig_ctx* ctx)
     }
     else
     {
-        cloudmig_log(ERR_LVL, "[Loading Status]: Could not create status:"
-                     "Ongoing migration for this configuration.\n"
-                     "Please use --force-resume option\n");
+        PRINTERR("[Loading Status]: Could not create status:"
+                 "Ongoing migration for this configuration.\n"
+                 "Please use --force-resume option\n",  0);
         goto err;
     }
 

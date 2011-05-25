@@ -31,6 +31,7 @@
 #include <unistd.h>
 
 #include "cloudmig.h"
+#include "options.h"
 
 static int create_status_bucket(struct cloudmig_ctx* ctx)
 {
@@ -94,12 +95,12 @@ static int fill_entry_from_object(struct file_state_entry* entry,
 }
 
 static int create_status_file(struct cloudmig_ctx* ctx,
-                              dpl_bucket_t* bucket,
+                              char* bucket_name,
                               char **filename)
 {
     assert(ctx != NULL);
     assert(ctx->src_ctx != NULL);
-    assert(bucket != NULL);
+    assert(bucket_name != NULL);
 
     int             ret = EXIT_FAILURE;
     dpl_status_t    dplret = DPL_SUCCESS;
@@ -114,27 +115,27 @@ static int create_status_file(struct cloudmig_ctx* ctx,
 
     cloudmig_log(DEBUG_LVL,
                  "[Creating Status]: Creating status file for bucket '%s'...\n",
-                 bucket->name);
+                 bucket_name);
 
-    if ((dplret = dpl_list_bucket(ctx->src_ctx, bucket->name,
+    if ((dplret = dpl_list_bucket(ctx->src_ctx, bucket_name,
                                   NULL, NULL, &objects, NULL)) != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not list bucket %s : %s\n", __FUNCTION__,
-                 bucket->name, dpl_status_str(dplret));
+                 bucket_name, dpl_status_str(dplret));
         goto end;
     }
 
 
-    *filename = cloudmig_get_status_filename_from_bucket(bucket->name);
+    *filename = cloudmig_get_status_filename_from_bucket(bucket_name);
     if (*filename == NULL)
     {
         PRINTERR("%s: Could not save bucket '%s' status : %s\n",
-                 __FUNCTION__, bucket->name, strerror(errno));
+                 __FUNCTION__, bucket_name, strerror(errno));
         goto end;
     }
 
     cloudmig_log(DEBUG_LVL, "[Creating status] Filename for bucket %s : %s\n",
-                 bucket->name, *filename);
+                 bucket_name, *filename);
 
     // Save the bucket and set the cloudmig_status bucket as current.
     ctx_bucket = ctx->src_ctx->cur_bucket;
@@ -147,7 +148,7 @@ static int create_status_file(struct cloudmig_ctx* ctx,
                                 &bucket_status)))
     {
         PRINTERR("%s: Could not create bucket %s's status file : %s\n",
-                 __FUNCTION__, bucket->name, dpl_status_str(dplret));
+                 __FUNCTION__, bucket_name, dpl_status_str(dplret));
         goto end;
     }
 
@@ -157,7 +158,7 @@ static int create_status_file(struct cloudmig_ctx* ctx,
     dpl_object_t** cur_object = (dpl_object_t**)objects->array;
     cloudmig_log(DEBUG_LVL,
                  "[Creating status] Bucket %s (%i objects) in file '%s':\n",
-                 bucket->name, objects->n_items, *filename);
+                 bucket_name, objects->n_items, *filename);
     ctx->status.general.head.nb_objects += objects->n_items;
     for (int i = 0; i < objects->n_items; ++i, ++cur_object)
     {
@@ -187,7 +188,7 @@ static int create_status_file(struct cloudmig_ctx* ctx,
         }
     }
     cloudmig_log(DEBUG_LVL, "[Creating status] Bucket %s: SUCCESS.\n",
-                 bucket->name);
+                 bucket_name);
 
     ret = EXIT_SUCCESS;
 
@@ -243,8 +244,11 @@ static int append_to_stlist(struct cldmig_entry **list,
 }
 
 
+/*
+ * the bname parameter points on the destinatino bucket's name if valid.
+ * It will be changed/computed if invalid/not available.
+ */
 static int create_destination_bucket(struct cloudmig_ctx *ctx,
-                                     char *fname,
                                      char **bname)
 {
     int             ret = EXIT_FAILURE;
@@ -253,18 +257,8 @@ static int create_destination_bucket(struct cloudmig_ctx *ctx,
 
     cloudmig_log(DEBUG_LVL,
                  "[Creating Status]: Creating destination bucket"
-                 " matching status bucket file '%s'...\n",
-                 fname);
-
-    *bname = strdup(fname);
-    if (*bname == NULL)
-    {
-        PRINTERR("%s: Could not create destination bucket for status %s: %s\n",
-                 __FUNCTION__, fname, strerror(errno));
-        goto err;
-    }
-    // The filename IS valid so no worries.
-    *strrchr(*bname, '.') = '\0';
+                 " %s...\n",
+                 *bname);
 
     /*
      * Here we want to create a bucket with the same attributes as the
@@ -315,7 +309,7 @@ retry_mb_with_patched_name:
             if (asprintf(&tmp, "cloudmig-%li-%s", t, *bname) == -1)
             {
                 PRINTERR("%s: Could not create dest bucket : %s.\n",
-                         __FUNCTION__, strerror(errno));
+                         "[Create Dest Buckets]", strerror(errno));
                 goto err;
             }
             free(*bname);
@@ -326,7 +320,7 @@ retry_mb_with_patched_name:
             goto retry_mb_with_patched_name;
         }
         PRINTERR("%s: Could not create destination bucket %s: %s\n",
-                 __FUNCTION__, *bname, dpl_status_str(dplret));
+                 "[Create Dest Buckets]", *bname, dpl_status_str(dplret));
         goto err;
     }
 
@@ -443,7 +437,7 @@ int create_status(struct cloudmig_ctx* ctx, dpl_vec_t* buckets)
     dpl_bucket_t**  cur_bucket = (dpl_bucket_t**)buckets->array;
     for (int i = 0; i < buckets->n_items; ++i, ++cur_bucket)
     {
-        ret = create_status_file(ctx, *cur_bucket, &status_filename);
+        ret = create_status_file(ctx, (*cur_bucket)->name, &status_filename);
         if (ret != EXIT_SUCCESS)
         {
             PRINTERR(
@@ -453,8 +447,92 @@ Please delete manually the bucket '%s' before restarting the tool...\n",
             goto err;
         }
 
-        ret = create_destination_bucket(ctx, status_filename,
-                                        &dest_bucket_name);
+        dest_bucket_name = strdup((*cur_bucket)->name);
+        if (dest_bucket_name == NULL)
+        {
+            PRINTERR("[Creating Status]: Could not create status for bucket %s:"
+                     "Could not allocate memory\n", (*cur_bucket)->name);
+            goto err;
+        }
+
+        ret = create_destination_bucket(ctx, &dest_bucket_name);
+        if (ret != EXIT_SUCCESS)
+            goto err; // Error already printed by callee
+ 
+        ret = append_to_stlist(&st_list, &status_filename, &dest_bucket_name);
+        if (ret != EXIT_SUCCESS)
+            goto err; // Error already printed by callee
+    }
+
+    /*
+     * Now, write the general status file (named ".cloudmig")
+     */
+    ret = create_cloudmig_status(ctx, st_list);
+    if (ret != EXIT_SUCCESS)
+        PRINTERR("%s: Could not create migration status file.\n",
+                 __FUNCTION__);
+
+err:
+    if (status_filename)
+        free(status_filename);
+
+    while (st_list)
+    {
+        struct cldmig_entry *save = st_list;
+        free(st_list->filename);
+        free(st_list->bucket);
+        st_list = st_list->next;
+        free(save);
+    }
+    return ret;
+}
+
+int create_buckets_status(struct cloudmig_ctx* ctx)
+{
+    int                     ret;
+    struct cldmig_entry     *st_list = NULL;
+    char                    *status_filename = NULL;
+    char                    *dest_bucket_name = NULL;
+
+    cloudmig_log(INFO_LVL,
+                 "[Creating Status]: Beginning creation of status...\n");
+
+    // First, create the status bucket since it didn't exist.
+    if ((ret = create_status_bucket(ctx)))
+    {
+        PRINTERR("%s: Could not create status bucket.\n", __FUNCTION__);
+        goto err;
+    }
+    ctx->src_ctx->cur_bucket = ctx->status.bucket_name;
+
+    /*
+     * For each bucket, we create a file named after it in the
+     * status bucket, and create the destination's bucket.
+     *
+     * Here, buckets is a string table ended by NULL pointer.
+     */
+    for (int i=0; gl_options->src_buckets[i]; ++i)
+    {
+        ret = create_status_file(ctx, gl_options->src_buckets[i],
+                                 &status_filename);
+        if (ret != EXIT_SUCCESS)
+        {
+            PRINTERR(
+"An Error happened while creating the status bucket and file.\n\
+Please delete manually the bucket '%s' before restarting the tool...\n",
+                     ctx->status.bucket_name);
+            goto err;
+        }
+
+        dest_bucket_name = strdup(gl_options->dst_buckets[i]);
+        if (dest_bucket_name == NULL)
+        {
+            PRINTERR("[Creating Status]: Could not create status for bucket %s:"
+                     "Could not allocate memory\n", gl_options->src_buckets[i]);
+            goto err;
+        }
+
+        ret = create_destination_bucket(ctx, &dest_bucket_name);
         if (ret != EXIT_SUCCESS)
             goto err; // Error already printed by callee
  
