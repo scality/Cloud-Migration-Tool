@@ -93,8 +93,16 @@ void cloudmig_log(enum cloudmig_loglevel lvl, const char* format, ...)
             break ;
         }
         va_start(args, format);
-        fprintf(logstream, "cloudmig: [%s]", loglvl_str);
-        vfprintf(logstream, format, args);
+        if (lvl == ERR_LVL)
+        {
+            fprintf(stderr, "cloudmig: [%s]", loglvl_str);
+            vfprintf(stderr, format, args);
+        }
+        if (logstream)
+        {
+            fprintf(logstream, "cloudmig: [%s]", loglvl_str);
+            vfprintf(logstream, format, args);
+        }
         va_end(args);
     }
 }

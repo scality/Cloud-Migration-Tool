@@ -51,7 +51,7 @@ int cloudmig_options_check(void)
     if (gl_options->flags & DEBUG
         && gl_options->flags & QUIET)
     {
-        PRINTERR("Bad options : q and v are mutually exclusive.", 0);
+        PRINTERR("Bad options : q and v are mutually exclusive.\n", 0);
         return (EXIT_FAILURE);
     }
     if (gl_options->flags & DEBUG)
@@ -183,7 +183,7 @@ int retrieve_opts(int argc, char* argv[])
                     gl_options->trace_flags |= DPL_TRACE_BUF;
                     break ;
                 default:
-                    cloudmig_log(ERR_LVL,
+                    PRINTERR(
                 "Character %c is an invalid argument to droplet-trace option.\n"
                 "See manpage for more informations.\n", *optarg);
                     return (EXIT_FAILURE);
