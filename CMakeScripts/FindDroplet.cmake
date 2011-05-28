@@ -30,14 +30,19 @@ IF (NOT DROPLET_FOUND)
     # the said library.
 
     # First, we need to find the path to droplet includes
-    # the "-1.0" part is the version part,
+    # the "-1.0" part is the version part (kind of bugging for the search),
+    # adding the user-defined variable DROPLET_PATH may help...
     FIND_PATH(DROPLET_INCLUDE_DIR
+              PATHS ${DROPLET_PATH}/include
               NAMES droplet.h
               PATH_SUFFIXES droplet droplet-1.0
     )
 
     # If it was found, we should be able to find the library too...
-    FIND_LIBRARY(DROPLET_LIBRARY droplet)
+    # Same here, the user-defined path may help
+    FIND_LIBRARY(DROPLET_LIBRARY droplet
+                 PATHS ${DROPLET_PATH}/lib
+    )
 
     IF (DROPLET_INCLUDE_DIR AND DROPLET_LIBRARY)
         SET (DROPLET_FOUND TRUE)
