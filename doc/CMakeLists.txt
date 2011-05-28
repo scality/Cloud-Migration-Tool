@@ -26,7 +26,8 @@
 
 
 # Macro call to build png file from dot (graphviz script) files
-COMPILE_DOT(${CLOUDMIG_SOURCE_DIR}/doc/callgraph.dot)
+# Has now become useless.
+#COMPILE_DOT(${CLOUDMIG_SOURCE_DIR}/doc/callgraph.dot)
 
 # Custom commands to compress the manpages...
 ADD_CUSTOM_COMMAND(

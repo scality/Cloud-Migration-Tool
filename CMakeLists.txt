@@ -83,15 +83,13 @@ MESSAGE(STATUS "Package maintainer : ${CPACK_PACKAGE_CONTACT}")
 
 
 ###############################################################################
-# Manage dependencies, and
+# Manage dependencies
 ###############################################################################
-# Find the (own) Dot package in order to build png files from dot files (doc).
-FIND_PACKAGE(Dot)
-
 # Find the (own) Droplet package in order to build the project.
 FIND_PACKAGE(Droplet REQUIRED)
 FIND_PACKAGE(LibXml2 REQUIRED)
-FIND_PACKAGE(Curses)
+FIND_PACKAGE(Curses)            #libcurses / libncurses for the viewer tool
+FIND_PACKAGE(Menu)              #libmenu, for the viewer tool
 
 
 #

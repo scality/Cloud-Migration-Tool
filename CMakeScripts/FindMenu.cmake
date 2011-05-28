@@ -25,22 +25,23 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 
 
-INCLUDE_DIRECTORIES(${CURSES_NCURSES_INCLUDE_PATH}
-                    ${MENU_INCLUDE_DIR}
-)
+IF (NOT MENU_FOUND)
+    # adding the user-defined variable MENU_PATH may help...
+    FIND_PATH(MENU_INCLUDE_DIR
+              PATHS ${MENU_PATH}/include
+              NAMES menu.h
+    )
 
-SET(VIEWER_SRC
-        main.c
-        display_status.c
-        init.c
-        instances_menu.c
-        tool_instances.c
-        view_instance.c
-)
+    # If it was found, we should be able to find the library too...
+    # Same here, the user-defined path may help
+    FIND_LIBRARY(MENU_LIBRARY menu
+                 PATHS ${MENU_PATH}/lib
+    )
 
-ADD_EXECUTABLE(cloudmig-view ${VIEWER_SRC})
-TARGET_LINK_LIBRARIES(cloudmig-view
-                      ${CURSES_NCURSES_LIBRARY}
-                      ${MENU_LIBRARY})
+    IF (MENU_INCLUDE_DIR AND MENU_LIBRARY)
+        SET (MENU_FOUND TRUE)
+        MESSAGE(STATUS "Libmenu include path found : ${MENU_INCLUDE_DIR}")
+        MESSAGE(STATUS "Libmenu library found : ${MENU_LIBRARY}")
+    ENDIF (MENU_INCLUDE_DIR AND MENU_LIBRARY)
 
-INSTALL(TARGETS cloudmig-view RUNTIME DESTINATION bin)
+ENDIF (NOT MENU_FOUND)
