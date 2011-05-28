@@ -40,8 +40,11 @@ IF (NOT DROPLET_FOUND)
 
     # If it was found, we should be able to find the library too...
     # Same here, the user-defined path may help
+    # We need to find a dynlib because otherwise the dependencies will
+    # not be linked (Xml, SSL), and will make the linking fail
     FIND_LIBRARY(DROPLET_LIBRARY droplet
-                 PATHS ${DROPLET_PATH}/lib
+                 # droplet stores its dynlib in .libs in its source dir
+                 PATHS ${DROPLET_PATH}/.libs ${DROPLET_PATH}/lib
     )
 
     IF (DROPLET_INCLUDE_DIR AND DROPLET_LIBRARY)
