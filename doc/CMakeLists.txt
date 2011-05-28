@@ -27,3 +27,24 @@
 
 # Macro call to build png file from dot (graphviz script) files
 COMPILE_DOT(${CLOUDMIG_SOURCE_DIR}/doc/callgraph.dot)
+
+# Custom commands to compress the manpages...
+ADD_CUSTOM_COMMAND(
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cloudmig.1.gz
+  COMMAND gzip -c ${CMAKE_CURRENT_SOURCE_DIR}/cloudmig.1 > ${CMAKE_CURRENT_BINARY_DIR}/cloudmig.1.gz
+  DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/cloudmig.1
+)
+ADD_CUSTOM_COMMAND(
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cloudmig-view.1.gz
+  COMMAND gzip -c ${CMAKE_CURRENT_SOURCE_DIR}/cloudmig-view.1 > ${CMAKE_CURRENT_BINARY_DIR}/cloudmig-view.1.gz
+  DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/cloudmig-view.1
+)
+ADD_CUSTOM_TARGET(cloudmig-man
+                  ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/cloudmig.1.gz)
+ADD_CUSTOM_TARGET(cloudmig-view-man
+                  ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/cloudmig-view.1.gz)
+
+INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/cloudmig.1.gz
+        DESTINATION share/man/man1)
+INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/cloudmig-view.1.gz
+        DESTINATION share/man/man1)

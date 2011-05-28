@@ -25,8 +25,7 @@
 ## POSSIBILITY OF SUCH DAMAGE.
 
 
-INCLUDE_DIRECTORIES(${CURSES_NCURSES_INCLUDE_PATH}
-)
+INCLUDE_DIRECTORIES(${CURSES_NCURSES_INCLUDE_PATH})
 
 SET(VIEWER_SRC      main.c
                     display_status.c
@@ -37,4 +36,8 @@ SET(VIEWER_SRC      main.c
 )
 
 ADD_EXECUTABLE(cloudmig-view ${VIEWER_SRC})
-TARGET_LINK_LIBRARIES(cloudmig-view ${CURSES_NCURSES_LIBRARY} /usr/lib/libmenu.so)
+TARGET_LINK_LIBRARIES(cloudmig-view
+                      ${CURSES_NCURSES_LIBRARY}
+                      /usr/lib/libmenu.so)
+
+INSTALL(TARGETS cloudmig-view RUNTIME DESTINATION bin)
