@@ -38,7 +38,7 @@ static FILE* logstream = NULL;
 
 int cloudmig_openlog(char* filename)
 {
-    if (logstream)
+    if (logstream && logstream != stderr)
         return EXIT_FAILURE;
 
     // If a filename is set, open it...
@@ -85,6 +85,9 @@ void cloudmig_log(enum cloudmig_loglevel lvl, const char* format, ...)
             break ;
         case WARN_LVL:
             loglvl_str = "WARN";
+            break ;
+        case STATUS_LVL:
+            loglvl_str = "STATUS";
             break ;
         case ERR_LVL:
             loglvl_str = "ERR";

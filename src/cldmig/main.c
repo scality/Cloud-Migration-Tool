@@ -59,10 +59,16 @@ int main(int argc, char* argv[])
     int     ret = EXIT_FAILURE;
     time_t  starttime = 0;
     time_t  difftime = 0;
-	struct cloudmig_options options = {0, 0, 0, 0, 1, 0, 0, 0, 0, 0};
-	gl_options = &options;
+	struct cloudmig_options options = {0, 0, 0, 0, 1,
+                                       NULL, NULL, NULL, NULL, NULL, NULL};
 
+    cloudmig_openlog(NULL); // set stderr as logger for the time being...
+
+    // Initializations for the main program.
+	gl_options = &options;
     starttime = time(NULL);
+
+    // Retrieve options and parse config (if need be)
     if (retrieve_opts(argc, argv) == EXIT_FAILURE)
         return (EXIT_FAILURE);
 
@@ -76,16 +82,11 @@ int main(int argc, char* argv[])
             return EXIT_SUCCESS;
     }
 
+    // Start the main program : Setup log, load profiles, and start migration.
     cloudmig_openlog(options.logfile);
 
     struct cloudmig_ctx     ctx =
-        {
-            NULL,
-            NULL,
-            -1,
-            { { {0, 0, 0, 0}, 0, NULL }, NULL, 0, 0, NULL},
-            NULL
-        };
+        {NULL, NULL, -1, {{{0, 0, 0, 0}, 0, NULL}, NULL, 0, 0, NULL}, NULL};
     ctx.tinfos = calloc(options.nb_threads, sizeof(*ctx.tinfos));
     if (ctx.tinfos == NULL)
     {
@@ -94,7 +95,7 @@ int main(int argc, char* argv[])
     }
 
     if (load_profiles(&ctx) == EXIT_FAILURE)
-        return (EXIT_FAILURE);
+        goto failure;
 
     if (setup_var_pid_and_sock(ctx.src_ctx->host,
                                ctx.dest_ctx->host) == EXIT_FAILURE)
@@ -110,6 +111,8 @@ int main(int argc, char* argv[])
     if (migrate(&ctx) == EXIT_FAILURE)
         goto failure;
 
+
+    // Migration ended : Now we can display a status for the migration session.
     difftime = time(NULL);
     difftime -= starttime;
 
@@ -117,7 +120,7 @@ int main(int argc, char* argv[])
         - ref.status.general.head.done_objects;
     ref.status.general.head.done_sz = ctx.status.general.head.done_sz
         - ref.status.general.head.done_sz;
-    cloudmig_log(INFO_LVL, "End of data migration. During this session :\n"
+    cloudmig_log(STATUS_LVL, "End of data migration. During this session :\n"
         "Transfered %llu/%llu objects\n"
         "Transfered %llu/%llu Bytes\n"
         "Average transfer speed : %llu Bytes/s\n"
@@ -136,6 +139,7 @@ int main(int argc, char* argv[])
 	ret = EXIT_SUCCESS;
 
 failure:
-    unsetup_var_pid_and_sock();
+    if (ctx.src_ctx)
+        unsetup_var_pid_and_sock();
 	return (ret);
 }

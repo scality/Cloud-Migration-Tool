@@ -49,16 +49,6 @@ cloudmig_options_check(void)
         PRINTERR("No destination defined for the migration.\n", 0);
         return (EXIT_FAILURE);
     }
-    if (gl_options->flags & DEBUG
-        && gl_options->flags & QUIET)
-    {
-        PRINTERR("Bad options : q and v are mutually exclusive.\n", 0);
-        return (EXIT_FAILURE);
-    }
-    if (gl_options->flags & DEBUG)
-        gl_loglevel = DEBUG_LVL;
-    else if (gl_options->flags & QUIET)
-        gl_loglevel = WARN_LVL;
     return (EXIT_SUCCESS);
 }
 
@@ -88,11 +78,11 @@ opt_dst_profile(void)
 }
 
 static int
-opt_trace(void)
+opt_trace(char *arg)
 {
-    while (*optarg)
+    while (*arg)
     {
-        switch (*optarg)
+        switch (*arg)
         {
         case 'n': // network = connexion
             gl_options->trace_flags |= DPL_TRACE_CONN;
@@ -124,35 +114,39 @@ opt_trace(void)
         default:
             PRINTERR(
                 "Character %c is an invalid argument to droplet-trace option.\n"
-                "See manpage for more informations.\n", *optarg);
+                "See manpage for more informations.\n", *arg);
             return (EXIT_FAILURE);
-            break ;
         }
-        optarg++;
+        arg++;
     }
     return (EXIT_SUCCESS);
 }
 
 static int
-opt_buckets(void)
+opt_buckets(char *arg)
 {
     char    *src;
     char    *dst;
     int     size = 0;
     char    *next_semicolon = optarg;
 
-    while (optarg && *optarg)
+    if (gl_options->src_buckets && gl_options->dst_buckets)
+    {
+        PRINTERR("Multiple Buckets association settings !\n", 0);
+        return EXIT_FAILURE;
+    }
+    while (arg && *arg)
     {
         // copy until the next ':' character.
-        src = strndup(optarg, strcspn(optarg, ":"));
-        dst = index(optarg, ':');
+        src = strndup(arg, strcspn(arg, ":"));
+        dst = index(arg, ':');
         if (dst)
         {
             ++dst; // Jump over the ':'
             // copy until the next semicolon (or end of string)
             dst = strndup(dst, strcspn(dst, ";"));
         }
-        next_semicolon = index(optarg, ';');
+        next_semicolon = index(arg, ';');
         if (dst == NULL ||
             *dst == 0 ||
             (next_semicolon && dst > next_semicolon))
@@ -174,12 +168,31 @@ opt_buckets(void)
                                           * (size + 1));
         gl_options->dst_buckets[size - 1] = dst;
         gl_options->dst_buckets[size] = NULL;
-        printf("Just got:\nsrc='%s'\ndst='%s'\n", src, dst);
 
-        optarg = next_semicolon;
-        if (optarg)
-            ++optarg; // jump over the semicolon.
+        arg = next_semicolon;
+        if (arg)
+            ++arg; // jump over the semicolon.
     }
+    return (EXIT_SUCCESS);
+}
+
+int
+opt_verbose(char *arg)
+{
+    if (arg == NULL)
+        return EXIT_FAILURE;
+    else if (strcmp(arg, "debug") == 0)
+        gl_loglevel = DEBUG_LVL;
+    else if (strcmp(arg, "info") == 0)
+        gl_loglevel = INFO_LVL;
+    else if (strcmp(arg, "warn") == 0)
+        gl_loglevel = WARN_LVL;
+    else if (strcmp(arg, "status") == 0)
+        gl_loglevel = STATUS_LVL;
+    else if (strcmp(arg, "error") == 0)
+        gl_loglevel = ERR_LVL;
+    else
+        return (EXIT_FAILURE);
     return (EXIT_SUCCESS);
 }
 
@@ -196,7 +209,10 @@ int retrieve_opts(int argc, char* argv[])
     char                    cur_opt = 0;
     int                     option_index = 0;
     static struct option    long_options[] = {
-//      {name, has_arg, flag, returned_val}
+//      {name, has_arg, flagptr, returned_val}
+        /* Behavior-related options         */
+        {"delete-source",   no_argument,        0,  0 },
+        {"background",      no_argument,        0,  0 },
         /* Configuration-related options    */
         {"src-profile",     required_argument,  0, 's'},
         {"dst-profile",     required_argument,  0, 'd'},
@@ -205,11 +221,8 @@ int retrieve_opts(int argc, char* argv[])
         /* Status-related options           */
 //      {"ignore-status",   no_argument,        0, 'i'},
         {"force-resume",    no_argument,        0, 'r'},
-        /* Behavior-related options         */
-        {"delete-source",   no_argument,        0,  0 },
-        {"background",      no_argument,        0,  0 },
         /* Verbose/Log-related options      */
-        {"verbose",         optional_argument,  0, 'v'},
+        {"verbose",         required_argument,  0, 'v'},
         {"droplet-trace",   required_argument,  0, 't'},
         {"output",          required_argument,  0, 'o'},
         /* Last element                     */
@@ -217,7 +230,7 @@ int retrieve_opts(int argc, char* argv[])
     };
 
     while ((cur_opt = getopt_long(argc, argv,
-                                  "-s:d:vr",
+                                  "-s:d:b:r:t:",
                                   long_options, &option_index)) != -1)
     {
         switch (cur_opt)
@@ -226,10 +239,10 @@ int retrieve_opts(int argc, char* argv[])
             // Manage all options without short equivalents :
             switch (option_index)
             {
-            case 4: // delete-source
+            case 0: // delete-source
                 gl_options->flags |= DELETE_SOURCE_DATA;
                 break ;
-            case 5: // background mode
+            case 1: // background mode
                 gl_options->flags |= BACKGROUND_MODE;
                 if (!gl_options->logfile)
                     gl_options->logfile = "cloudmig.log";
@@ -266,21 +279,21 @@ int retrieve_opts(int argc, char* argv[])
                 return (EXIT_FAILURE);
             break ;
         case 'b':
-            if (opt_buckets())
+            if (opt_buckets(optarg))
                 return (EXIT_FAILURE);
             break ;
         case 'r':
             gl_options->flags |= RESUME_MIGRATION;
             break ;
         case 't':
-            if (opt_trace())
+            if (opt_trace(optarg))
                 return (EXIT_FAILURE);
             break;
 /*      case 'i':
             gl_options->flags |= IGNORE_STATUS;
             break ; */
         case 'v':
-            gl_options->flags |= DEBUG;
+            opt_verbose(optarg);
             break ;
         case 'o':
             gl_options->logfile = optarg;

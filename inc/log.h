@@ -39,6 +39,7 @@ enum cloudmig_loglevel
     DEBUG_LVL,
     INFO_LVL,
     WARN_LVL,
+    STATUS_LVL,
     ERR_LVL
 };
 
