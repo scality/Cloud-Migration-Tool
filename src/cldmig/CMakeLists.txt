@@ -36,6 +36,7 @@ SET(CLOUDMIG_SRC    main.c
                     display.c
                     file_acl.c
                     file_transfer.c
+                    load_config.c
                     load_profiles.c
                     log.c
                     options.c

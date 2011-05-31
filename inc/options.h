@@ -50,7 +50,14 @@ struct cloudmig_options
     char        *logfile;
     char        **src_buckets;
     char        **dst_buckets;
+    char        *config;
 };
+
+// Used by config parser as well as command line arguments parser.
+int opt_buckets(char *arg);
+int opt_trace(char *arg);
+int opt_verbose(char *arg);
+int cloudmig_options_check(void);
 
 extern struct cloudmig_options* gl_options;
 

@@ -48,6 +48,15 @@
 #include "transfer_info.h"
 #include "display_protocol.h"
 
+// Used for config retrieval.
+struct cldmig_config
+{
+    char    src_profile[256];
+    char    dst_profile[256];
+    int     src_entry_count;
+    int     dst_entry_count;
+};
+
 
 /*
  * This structure gives information about one thread current actions
@@ -78,6 +87,7 @@ struct cloudmig_ctx
  * Required prototypes
  */
 int     retrieve_opts(int argc, char *argv[]);
+int     load_config(struct cldmig_config *conf);
 int     setup_var_pid_and_sock(char *src, char *dst);
 int     load_profiles(struct cloudmig_ctx *ctx);
 int     load_status(struct cloudmig_ctx *ctx);

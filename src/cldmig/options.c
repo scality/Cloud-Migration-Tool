@@ -36,7 +36,7 @@
 
 extern enum cloudmig_loglevel gl_loglevel;
 
-static int
+int
 cloudmig_options_check(void)
 {
     if (!gl_options->src_profile)
@@ -77,7 +77,7 @@ opt_dst_profile(void)
     return (EXIT_SUCCESS);
 }
 
-static int
+int
 opt_trace(char *arg)
 {
     while (*arg)
@@ -122,7 +122,7 @@ opt_trace(char *arg)
     return (EXIT_SUCCESS);
 }
 
-static int
+int
 opt_buckets(char *arg)
 {
     char    *src;
@@ -217,7 +217,7 @@ int retrieve_opts(int argc, char* argv[])
         {"src-profile",     required_argument,  0, 's'},
         {"dst-profile",     required_argument,  0, 'd'},
         {"buckets",         required_argument,  0, 'b'},
-//      {"config",          required_argument,  0, 'c'},
+        {"config",          required_argument,  0, 'c'},
         /* Status-related options           */
 //      {"ignore-status",   no_argument,        0, 'i'},
         {"force-resume",    no_argument,        0, 'r'},
@@ -282,6 +282,11 @@ int retrieve_opts(int argc, char* argv[])
             if (opt_buckets(optarg))
                 return (EXIT_FAILURE);
             break ;
+        case 'c':
+            if (gl_options->config)
+                return (EXIT_FAILURE);
+            gl_options->config = optarg;
+            break ;
         case 'r':
             gl_options->flags |= RESUME_MIGRATION;
             break ;
@@ -303,7 +308,7 @@ int retrieve_opts(int argc, char* argv[])
             return (EXIT_FAILURE);
         }
     }
-    if (cloudmig_options_check())
+    if (gl_options->config == NULL && cloudmig_options_check())
         return (EXIT_FAILURE);
     return (EXIT_SUCCESS);
 }

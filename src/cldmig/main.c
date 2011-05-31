@@ -59,6 +59,7 @@ int main(int argc, char* argv[])
     int     ret = EXIT_FAILURE;
     time_t  starttime = 0;
     time_t  difftime = 0;
+    struct cldmig_config conf = {{0}, {0}, 0, 0};
 	struct cloudmig_options options = {0, 0, 0, 0, 1,
                                        NULL, NULL, NULL, NULL, NULL, NULL};
 
@@ -72,6 +73,13 @@ int main(int argc, char* argv[])
     if (retrieve_opts(argc, argv) == EXIT_FAILURE)
         return (EXIT_FAILURE);
 
+    if (gl_options->config)
+    {
+        if (load_config(&conf) == EXIT_FAILURE)
+            return (EXIT_FAILURE);
+    }
+
+    // Setup the background mode if need be.
     if (options.flags & BACKGROUND_MODE)
     {
         int pid = fork();
@@ -139,6 +147,12 @@ int main(int argc, char* argv[])
 	ret = EXIT_SUCCESS;
 
 failure:
+    if (gl_options->config)
+    {
+        // Delete both temp files
+        unlink(conf.src_profile);
+        unlink(conf.dst_profile);
+    }
     if (ctx.src_ctx)
         unsetup_var_pid_and_sock();
 	return (ret);
