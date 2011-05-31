@@ -48,12 +48,15 @@ int load_profiles(struct cloudmig_ctx* ctx)
     else
     {
         profile_name = basename(cpy);
+        char * point = strrchr(profile_name, '.');
+        if (point)
+            *point = '\0';
         profile_dir = dirname(cpy);
     }
     if ((ctx->src_ctx = dpl_ctx_new(profile_dir, profile_name)) == NULL)
     {
-        PRINTERR("Could not load source profile : %s/%s",
-                 profile_dir, profile_name);
+        PRINTERR("Could not load source profile : %s/%s\n",
+                 profile_dir, profile_name, strerror(errno));
         return (EXIT_FAILURE);
     }
     free(cpy);
@@ -66,12 +69,15 @@ int load_profiles(struct cloudmig_ctx* ctx)
     else
     {
         profile_name = basename(cpy);
+        char * point = strrchr(profile_name, '.');
+        if (point)
+            *point = '\0';
         profile_dir = dirname(cpy);
     }
     if ((ctx->dest_ctx = dpl_ctx_new(profile_dir, profile_name)) == NULL)
     {
         dpl_ctx_free(ctx->src_ctx);
-        PRINTERR("Could not load destination profile : %s/%s",
+        PRINTERR("Could not load destination profile : %s/%s\n",
                  profile_dir, profile_name);
         return (EXIT_FAILURE);
     }
