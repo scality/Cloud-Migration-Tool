@@ -1,3 +1,29 @@
+## Copyright (c) 2011, David Pineau
+## All rights reserved.
+##
+## Redistribution and use in source and binary forms, with or without
+## modification, are permitted provided that the following conditions are met:
+##  * Redistributions of source code must retain the above copyright
+##    notice, this list of conditions and the following disclaimer.
+##  * Redistributions in binary form must reproduce the above copyright
+##    notice, this list of conditions and the following disclaimer in the
+##    documentation and/or other materials provided with the distribution.
+##  * Neither the name of the copyright holder nor the names of its contributors
+##    may be used to endorse or promote products derived from this software
+##    without specific prior written permission.
+##
+## THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+## AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+## IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+## ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER AND CONTRIBUTORS BE
+## LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+## CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+## SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+## INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+## CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+## ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+## POSSIBILITY OF SUCH DAMAGE.
+
 ################################################################################
 #
 #                       CLOUDMIG BUILDING INSTRUCTIONS
@@ -18,6 +44,7 @@ b) Library dependencies
 In order to build the cloud migration tool, you will need to have installed :
  - libdroplet (depends on libXml2)
  - libcurses
+ - libmenu
 
 
 
@@ -26,7 +53,17 @@ II - Building the tool
 a) Setup using CMake
 
 As cmake searches and sets most of the information it needs, you may not have
-anything to setup beforehand if your cmake version is properly installed.
+anything to setup beforehand if your cmake version is properly installed. That
+being said, some cmake variables are setup to help personalize the build,
+depending on your build environment (those are all facultative):
+ - DROPLET_PATH             (the path of droplet installation: helps finding it)
+ - MENU_PATH                (the path of libmenu : helps finding it)
+ - CLDMIG_INSTALL_PREFIX    (the installation directory for 'make install')
+ - CLDMIG_PKG_TYPE          (the type of package to build with 'make package')
+
+These cmake variables are to be defined when typing the cmake command with the
+-D option :
+$> cmake -D THE_VARIABLE=the_value -D ANOTHER_VARIABLE=the_other_value
 
 In order to keep the source directory clean while building, we advice to create
 a build directory wherever you want. Then go into it and launch the cmake tool
@@ -60,9 +97,73 @@ place in the bin/ directory of your build root.
 
 ################################################################################
 #
-#                       CLOUDMIG INSTALLATION INSTRUCTIONS
+#                       cloudmig INSTALLATION INSTRUCTIONS
 #
 ################################################################################
 
-Nothing yet, since the tool cmake configuration does not have any install rules
-written yet.
+III - Installing from the source
+
+a) CMake setup
+
+For the installation process, you may want to define some cmake variables
+allowing to setup a different installation path. The cmake variable
+CLDMIG_INSTALL_PREFIX can be defined for this use through the cmake -D option
+(see I - a for more details). By default, the install prefix is /usr/local/.
+
+b) Installation
+
+Now that everything is setup correctly, you can build the tool with the command
+make and then install it with administrator privileges if the prefix you setup
+is a system-wide path (like /usr or /usr/local). Otherwise, you only have to
+type the command 'make install':
+
+$> make
+...
+$> make install
+...
+
+Now, it's done ! The manpages for both tools (cloudmig and cloudmig-view) are
+installed with the tools !
+
+
+IV - Installing from the packages
+
+a) Packages available
+
+The distributed packages will install the files into the /usr directory. If you
+want to install the tool within a different directory, the packages must be
+built from the source, while defining the CMake variable CLDMIG_INSTALL_PREFIX.
+
+Currently, two packages are available :
+ - A deb package;
+ - A rpm package.
+
+
+b) Building your own package
+
+In order to build your own package from the source (that may be in order to be
+able to delete the source directory and still be able to uninstall the tool
+whenever you want), you must first follow the steps for building, and you
+may want to define the CMake variable CLDMIG_INSTALL_PREFIX in order for the
+package to install the files somewhere other than in /usr. For example :
+$> cmake -D CLDMIG_INSTALL_PREFIX=/usr/local ..
+
+This will setup CMake to build a package that will install its files into the
+/usr/local directory.
+
+All that is left is to build the package itself with the make command and you
+will be ready to install or distribute it :
+$> make package.
+
+
+c) Installing with a package
+
+DEB package:
+    Type the command 'dpkg -i the_package.deb' as an administrator and
+    everything will be done for you. For example:
+    $> sudo dpkg -i cloudmig-1.0.0-Linux.deb
+
+RPM package:
+    Type the command 'rpm -i the_package.deb' as an administrator and
+    everything will be done for you. For example:
+    $> sudo rpm -i cloudmig-1.0.0-Linux.rpm
