@@ -25,4 +25,70 @@
 .\" POSSIBILITY OF SUCH DAMAGE.
 .\"
 
+.TH CLOUDMIG-VIEW 1 "March 15, 2011" "BSD 3-clause Licence" "BSD General Commands Manual"
+
+.SH NAME
+
+.P
+.B
+cloudmig-view
+- cloud storage migration tool (cloudmig) status viewer
+
+.SH SYNOPSIS
+.P
+.B cloudmig-view
+
+.SH DESCRIPTION
+
+.P
+This program is the viewer associated with the cloud migration tool (cloudmig).
+It connects to an unix socket setup by the migration tool, and waits for data
+sent by it. This is program with a curses interface, in order to be usable
+inside a terminal.
+
+.P
+By displaying the list of ongoing migrations on your system, it allows to choose
+which migration to view (by moving the cursors with the up/down arrows), and
+then display it.
+
+.P
+It displays different progress bars and informations about the selected ongoing
+migration : a global progress bar, and the progress of the files currently
+being transferred by the tool.
+
+.SH SEE ALSO
+.P
+cloudmig(1)
+
+.SH AUTHOR
+
+Written by David Pineau.
+
+
+.SH REPORTING BUGS AND COMMENTS
+.P
+Please report any bug you encounter with this tool on the
+project's github tracker :
+
+http://github.com/Joacchim/Scality-Cloud-Migration-Tool/issues
+.P
+If you have any suggestion for this tool, please report them on the same page.
+For positive or negative comments, contact the author through github.
+
+
+.SH COPYRIGHT
+.P
+Copyright © 2011, David Pineau
+.br
+Licence: Modified BSD (3-clause)
+.br
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+
+
+.SH KNOWN BUGS
+
+.P
+No known bugs at the moment.
+
 
