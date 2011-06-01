@@ -1,6 +1,6 @@
 ## Copyright (c) 2011, David Pineau
 ## All rights reserved.
-
+##
 ## Redistribution and use in source and binary forms, with or without
 ## modification, are permitted provided that the following conditions are met:
 ##  * Redistributions of source code must retain the above copyright
@@ -11,7 +11,7 @@
 ##  * Neither the name of the copyright holder nor the names of its contributors
 ##    may be used to endorse or promote products derived from this software
 ##    without specific prior written permission.
-
+##
 ## THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 ## AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 ## IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -62,10 +62,15 @@ ENDIF (CLDMIG_PKG_TYPE)
 # Next, check an user-defined installation prefix.
 IF (CLDMIG_INSTALL_PREFIX)
     SET(CMAKE_INSTALL_PREFIX ${CLDMIG_INSTALL_PREFIX})
-    SET(CPACK_PACKAGE_INSTALL_DIRECTORY ${CMAKE_INSTALL_PREFIX})
+    SET(CPACK_PACKAGING_INSTALL_PREFIX ${CMAKE_INSTALL_PREFIX})
 ENDIF (CLDMIG_INSTALL_PREFIX)
 
-# And finally, set the maintener's contact information.
+# And finally, every global CPACK variable :
+SET(CPACK_PACKAGE_NAME "cloudmig")
+SET(CPACK_PACKAGE_DESCRIPTION_SUMMARY "cloudmig is a tool for migrating data between cloud storage accounts and cloudmig-view is it's status viewer.")
+#SET(CPACK_PACKAGE_INSTALL_DIRECTORY "cloudmig")
+
+# set the maintener's contact information.
 SET(CPACK_PACKAGE_CONTACT "David Pineau <dav.pineau@gmail.com>")
 
 
@@ -93,13 +98,9 @@ FIND_PACKAGE(Menu)              #libmenu, for the viewer tool
 
 
 #
-# Generate the documentation
+# Generate the documentation (manpages mainly)
 #
-IF (DOT_EXECUTABLE_FOUND)
-    # Adds a macro COMPILE_DOT allowing to build png from dot files
-    INCLUDE (CMakeScripts/CompileDot.cmake)
-    ADD_SUBDIRECTORY(doc/)
-ENDIF (DOT_EXECUTABLE_FOUND)
+ADD_SUBDIRECTORY(doc)
 
 #
 # Compile the code
