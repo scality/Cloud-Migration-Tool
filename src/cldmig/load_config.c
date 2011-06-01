@@ -199,7 +199,8 @@ ini_read_section(char *buf, size_t len, size_t *line,
         return false;
     }
     *idx = cur_idx;
-    cloudmig_log(DEBUG_LVL, "[Loading Config]: read section : %s...\n", *secname);
+    cloudmig_log(DEBUG_LVL,
+                 "[Loading Config]: read section : %s...\n", *secname);
     return true;
 }
 
@@ -238,7 +239,9 @@ ini_read_keyval(char *buf, size_t len, size_t *line,
         PRINTERR("[Loading Config]: Junk at end of line %i.\n", *line);
         return false;
     }
-    cloudmig_log(DEBUG_LVL, "[Loading Config]: read key/val : \"%s=%s\"...\n", *key, *val);
+    cloudmig_log(DEBUG_LVL,
+                 "[Loading Config]: read key/val : \"%s=%s\"...\n",
+                 *key, *val);
     *idx = cur_idx;
     return true;
 }
