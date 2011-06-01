@@ -40,28 +40,32 @@ cloudmig
 .P
 .B
 cloudmig
-{
-.I
-src_profile_name
-| 
-.B
--s
-.I
-src_profile
-}
-{
-.I
-dst_profile_name
-| 
-.B
--s
-.I
-dst_profile
-}
-[
-.B
--iqv
+[ \fIsrc_profile_name\fP | \fB\-\-src\-profile\fP=\fIsrc_profile\fP ]
+.br
+[ \fIdst_profile_name\fP | \fB\-\-dst\-profile\fP=\fIdst_profile\fP ]
+.br
+[ \fB\-\-config\fP=\fIconfig_file\fP ]
+.br
+[ \fB\-\-buckets\fP=\fIbuckets_associations\fP]
+.br
+[ \fB\-\-force\-resume\fP ]
+.br
+[ \fB\-\-delete\-source\fP ]
+.br
+[ \fB\-\-background\fP ]
+.br
+[ \fB\-\-output\fP=\fIlog_file\fP ]
+.br
+[ \fB\-\-verbose\fP=[
+\fBdebug\fP
+| \fBinfo\fP
+| \fBwarn\fP
+| \fBstatus\fP
+| \fBerror\fP ]
 ]
+.br
+[ \fB\-\-droplet\-trace\fP=\fInihsrcdfb\fP ]
+
 
 
 .SH DESCRIPTION
@@ -70,60 +74,200 @@ dst_profile
 cloudmig migrates the content of a cloud storage account to another. It uses
 the Scality Droplet Library to abstract the APIs of the service that hosts the
 data. Thus, the supported services depend on the services supported by the
-library.
+library (see http://github.com/scality/Droplet/ for more information).
 
 .P
 The source's profile name and destination's profile name are the names of the
-droplet profiles located in the default droplet directory, as described by the
-droplet library documentation.
+droplet profiles located in the default droplet directory (~/.droplet by
+default). Those are mandatory if no configuration file is given to the tool
+(through the --config option).
 
 .P
 The program first connects to the source account, and creates a status bucket
 to be filled with files describing the migration status of each bucket. This
 status is updated regularly throughout the migration. If the migration is
-stopped in any way (crash, manual stop, ...), this status will be used at the
+stopped in any way (crash, manual stop, ...), this status may be used at the
 next attempt to migrate the data. While creating the status files, it creates
 the destination buckets where the files will be transfered.
 
 
 .SH OPTIONS
+Here is an exhaustive list of the options available for the cloud migration
+tool. Almost all of them have an equivalent in the configuration file. This
+will be described in a latter section.
 
-.B
--s
-.I
-src_profile
+\fB\-s\fP \fI src_profile\fP
+.br
+\fB\-\-src\-profile\fP=\fIsrc_profile\fP
 .RS
 Gives the path of the source profile to the program instead of using the
 default droplet directory with a profile name.
 .RE
- 
-.B
--d
-.I
-dst_profile
+
+\fB\-d\fP \fIdst_profile\fP
+.br
+\fB\-\-dst\-profile\fP=\fIdst_profile\fP
 .RS
 Gives the path of the destination profile to the program instead of using the
 default droplet directory with a profile name.
 .RE
- 
-.B
--i
+
+\fB\-c\fP \fIconfig_file\fP
+.br
+\fB\-\-config\fP=\fIconfig_file\fP
 .RS
-If there is a status bucket on the source profile, it is ignored and may
-probably be overwritten. This allows restarting a migration.
+Uses a configuration file containing all settings for the tools (including
+migration profiles). Every setting inside the configuration file will override
+the settings of the command-line arguments. The source and destination profiles
+\fBmust\fP be defined inside the configuration file if this option is used.
 .RE
- 
-.B
--q
+
+\fB\-b\fP \fIbuckets_associations\fP
+.br
+\fB\-\-buckets\fP=\fIbuckets_associations\fP
 .RS
-Quiet mode. Deactivates the user display.
+Allows to give a formatted string containing the associations of source and
+destination buckets. Each association is separated by a semi-colon, and the
+source and destination buckets are separated by a colon.
+i.e.  source1\fI:\fPdestination1\fI;\fPsource2\fI:\fPdestination2
+The tool will therefore only transfer the given buckets into their given
+destination. A destination " must " not be an empty string.
 .RE
- 
-.B
--v
+
+\fB\-r\fP, \fB\-\-force\-resume\fP
 .RS
-Verbose/Debug mode for cloudmig.
+Allows the tool to resume a migration that was interrupted before (with the
+same source and destination). By default, the tool aborts and prints a message
+about the ongoing migration.
 .RE
+
+\fB\-\-delete\-source\fP
+.RS
+Deletes the source's migrated content at the end of a successful migration. By
+default, the tool does not delete the migrated data nor the status bucket. This
+options allows to delete both at the end of the migration.
+.RE
+
+\fB\-b\fP, \fB\-\-background\fP
+.RS
+Enables the tool's background mode. This means that nothing will be logged onto
+the standard outputs, but in cloudmig.log by default instead. The tool will run
+in the background, and give back the control over the shell to the user. See
+the \-\-output option in order to see how to change the logging file.
+.RE
+
+\fB\-o\fP \fIlog_file\fP
+\fB\-\-output\fP=\fIlog_file\fP
+.RS
+Gives a file to use for the logging. By default, everything is logged on the
+standard error output. When using this option, only the ERRORS are still logged
+in the standard error output, and everything is logged into the file. In
+background mode, everything is logged by default into cloudmig.log. Using this
+option allows to change the logging file in this case.
+.RE
+
+\fB\-v\fP \fIverbose_level\fP
+\fB\-\-verbose\fP=\fIverbose_level\fP
+.RS
+Choose the verbosity of the migration tool. By default, the tool outputs
+information about the files being transfered, as well as the warnings, errors,
+and the end of migration status report. This report consists on telling some
+stats about the migration : number of objects transfered during the session
+(without interruption), quantity of data transfered, elapsed time since the
+beginning of the migration and average transfer speed.
+.br
+Available verbosity level are :
+.br
+    \fBdebug\fP: everything but the library's debugging traces is logged
+.br
+    \fBinfo\fP: default behavior.
+.br
+    \fBwarn\fP: outputs warnings, end status report, and errors.
+.br
+    \fBstatus\fP: outputs errors and end status report.
+.br
+    \fBerror\fP: outputs only the errors of the tool.
+.RE
+
+
+\fB\-t\fP \fIoption_string\fP,
+\fB\-\-droplet\-trace\fP=\fIoption_string\fP
+.RS
+Enables the Droplet libary's traces. This is mainly an option for debugging
+if one encounters some issues with the tool. Each character of the \fIoption_string\fP matches one type of trace :
+.br
+    \fBn\fP: network/connection traces
+.br
+    \fBi\fP: input/output traces (data sent/received through the network)
+.br
+    \fBh\fP: http reponse traces (http reponse headers)
+.br
+    \fBs\fP: ssl traces (encryption informations, if https was activated)
+.br
+    \fBr\fP: http request traces (htpt request headers)
+.br
+    \fBc\fP: droplet convapi traces (manipulation of buckets and objects)
+.br
+    \fBd\fP: droplet vdir traces (directory simulations)
+.br
+    \fBf\fP: droplet vfile traces (file simulations)
+.br
+    \fBb\fP: droplet buffer traces.
+.RE
+
+
+.SH CONFIGURATION FILE
+
+.SS Priority of the configuration over the options
+.P
+Every single value inside the configuration file will override the command-line
+argument's value during the program's execution. This means that if one uses
+the option --verbose=debug on the commandline, but that the configuration file
+states verbose=status, then the tool will be in debug mode only until the
+verbose=status line is read from the configuration file.
+
+.SS Format
+.P
+The format of cloudmig's configuration file is a standard ini format. It must
+contain three sections:
+.br
+    \fIsource\fP: contains information about the source account
+.br
+    \fIdestination\fP: contains information about the destination account
+.br
+    \fIcloudmig\fP: contains information about the tool's behavior
+
+.P
+Both source and destination sections contains the same values:
+.br
+    \fIuse_https\fP(boolean): secure connection (default false)
+.br
+    \fIhost\fP(string): host of the storage account
+.br
+    \fIaccess_key\fP(string): account name
+.br
+    \fIsecret_key\fP(string): account password
+.br
+    \fIssl_cert_file\fP(string): (use_https=true) ssl certificate file path
+.br
+    \fIssl_key_file\fP(string): (use_https=true) ssl key file path
+.br
+    \fIssl_password\fP(string): ssl key's password
+.br
+    \fIssl_ca_list\fP(string): ssl key's password
+.br
+    \fIpricing\fP(string): path to the droplet pricing file
+.br
+    \fIread_buf_size\fP(string): size of droplet's buffer (default 8192)
+.br
+    \fIencrypt_key\fP(string): key for on-the-fly encryption by libdroplet.
+.P
+The possible values for the cloudmig section match almost every command-line
+option. Indeed, only the options --config, --src-profile and --dst-profile
+are not used within this section. The names of the values to define match the
+option's names (without the two first dashes), and use the same values.
+See the OPTIONS section for more information about each of them.
+
 
 
 .SH AUTHOR
@@ -140,9 +284,16 @@ project's github tracker :
 http://github.com/Joacchim/Scality-Cloud-Migration-Tool/issues .
 
 .P
-If you have any suggestion for this tool, please report them on the same page. For positive or negative comments, contact the author through github.
+If you have any suggestion for this tool, please report them on the same page.
+For positive or negative comments, contact the author through github.
 
 .SH KNOWN BUGS
-None at the moment.
+
+.P
+\fITracker issue #10\fP : \fBAcl replication management\fP
+.br
+When transferring a file, the canned_acl are calculated from the file's whole
+acl xml. Two of the six canned_acl defined in the S3 API aren't supported at
+the moment, and will default to a private file acl.
 
 
