@@ -128,7 +128,7 @@ opt_buckets(char *arg)
     char    *src;
     char    *dst;
     int     size = 0;
-    char    *next_semicolon = optarg;
+    char    *next_coma = optarg;
 
     if (gl_options->src_buckets && gl_options->dst_buckets)
     {
@@ -144,12 +144,12 @@ opt_buckets(char *arg)
         {
             ++dst; // Jump over the ':'
             // copy until the next semicolon (or end of string)
-            dst = strndup(dst, strcspn(dst, ";"));
+            dst = strndup(dst, strcspn(dst, ","));
         }
-        next_semicolon = index(arg, ';');
+        next_coma = index(arg, ',');
         if (dst == NULL ||
             *dst == 0 ||
-            (next_semicolon && dst > next_semicolon))
+            (next_coma && dst > next_coma))
         {
             PRINTERR("The list of source/destination buckets is invalid.\n", 0);
             return (EXIT_FAILURE);
@@ -169,7 +169,7 @@ opt_buckets(char *arg)
         gl_options->dst_buckets[size - 1] = dst;
         gl_options->dst_buckets[size] = NULL;
 
-        arg = next_semicolon;
+        arg = next_coma;
         if (arg)
             ++arg; // jump over the semicolon.
     }
