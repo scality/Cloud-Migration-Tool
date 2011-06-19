@@ -88,7 +88,7 @@ retry:
         {
             if (++failures < 3)
             {
-                cloudmig_log(ERR_LVL,
+                cloudmig_log(WARN_LVL,
                     "[Migrating] : failure, retrying migration of file %s.\n",
                              filestate->name);
                 goto retry;
