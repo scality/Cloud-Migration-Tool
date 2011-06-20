@@ -243,9 +243,8 @@ int retrieve_opts(int argc, char* argv[])
                 gl_options->flags |= DELETE_SOURCE_DATA;
                 break ;
             case 1: // background mode
+                // In background mode, the tool should be fully silent
                 gl_options->flags |= BACKGROUND_MODE;
-                if (!gl_options->logfile)
-                    gl_options->logfile = "cloudmig.log";
                 break ;
             }
             break ;

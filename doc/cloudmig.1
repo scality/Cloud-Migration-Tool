@@ -148,12 +148,12 @@ default, the tool does not delete the migrated data nor the status bucket. This
 options allows to delete both at the end of the migration.
 .RE
 
-\fB\-b\fP, \fB\-\-background\fP
+\fB\-\-background\fP
 .RS
-Enables the tool's background mode. This means that nothing will be logged onto
-the standard outputs, but in cloudmig.log by default instead. The tool will run
-in the background, and give back the control over the shell to the user. See
-the \-\-output option in order to see how to change the logging file.
+Enables the tool's background mode. This means that nothing will be logged by
+default. The tool will run in the background, and give back the control over
+the shell to the user. See the \-\-output option in order to see how to setup
+the logging file.
 .RE
 
 \fB\-o\fP \fIlog_file\fP
@@ -161,9 +161,7 @@ the \-\-output option in order to see how to change the logging file.
 .RS
 Gives a file to use for the logging. By default, everything is logged on the
 standard error output. When using this option, only the ERRORS are still logged
-in the standard error output, and everything is logged into the file. In
-background mode, everything is logged by default into cloudmig.log. Using this
-option allows to change the logging file in this case.
+in the standard error output, and everything is logged into the file.
 .RE
 
 \fB\-v\fP \fIverbose_level\fP

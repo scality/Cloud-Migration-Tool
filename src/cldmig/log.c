@@ -32,6 +32,7 @@
 #include <unistd.h>
 
 #include "cloudmig.h"
+#include "options.h"
 
 enum cloudmig_loglevel gl_loglevel = INFO_LVL;
 static FILE* logstream = NULL;
@@ -44,7 +45,6 @@ int cloudmig_openlog(char* filename)
     // If a filename is set, open it...
     if (filename)
         logstream = fopen(filename, "a+");
-    // Otherwise, use stderr (we may not be in background mode..)
     else
         logstream = stderr;
     if (logstream == NULL)
@@ -70,7 +70,8 @@ void cloudmig_closelog(void)
 
 void cloudmig_log(enum cloudmig_loglevel lvl, const char* format, ...)
 {
-    if (lvl >= gl_loglevel)
+    if (lvl >= gl_loglevel
+        && !(gl_options->flags & BACKGROUND_MODE && logstream == stderr))
     {
         va_list args;
         char*   loglvl_str = 0;
