@@ -86,17 +86,23 @@ get_eta(uint64_t done, uint64_t total, uint32_t byterate)
     seconds %= 60;
     if (days)
     {
-        if (asprintf(&str, "%llud%lluh ETA", days, hours) == -1)
+        if (asprintf(&str, "%llud%lluh ETA",
+                     (long long unsigned int)days,
+                     (long long unsigned int)hours) == -1)
             return NULL;
     }
     else if (hours)
     {
-        if (asprintf(&str, "%lluh%llum ETA", hours, minutes) == -1)
+        if (asprintf(&str, "%lluh%llum ETA",
+                     (long long unsigned int)hours,\
+                     (long long unsigned int)minutes) == -1)
             return NULL;
     }
     else
     {
-        if (asprintf(&str, "%llum%llus ETA", minutes, seconds) == -1)
+        if (asprintf(&str, "%llum%llus ETA",
+                     (long long unsigned int)minutes,
+                     (long long unsigned int)seconds) == -1)
             return NULL;
     }
     return (str);
@@ -125,7 +131,7 @@ print_global_line(uint64_t bdone, uint64_t btotal,
 
     ret = asprintf(&stats,
              " %llu/%llu objects (%.2f%s/%.2f%s)  %.2f%s/s  %s",
-             done_obj, nb_obj,
+             (long long unsigned int)done_obj, (long long unsigned int)nb_obj,
              float_values[0], sz_str[0],
              float_values[1], sz_str[1],
              float_values[2], sz_str[2],
