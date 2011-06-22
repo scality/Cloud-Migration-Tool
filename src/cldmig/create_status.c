@@ -280,8 +280,12 @@ retry_mb_with_patched_name:
          * A bucket is an unique identifier on a storage space,
          * independant from the users. So two users cannot have the same
          * bucket name. Therefore, a tweak is necessarry.
+         *
+         * DPL_ENOENT and DPL_EEXIST for compatibility with droplet versions
+         * (main head currently does not offer EEXIST but only ENOENT)
          */
-        if (dplret == DPL_EEXIST && retried == false)
+        if ((dplret == DPL_ENOENT || dplret == DPL_EEXIST)
+            && retried == false)
         {
             /*
              * First, workaround the pool connection issue of libdroplet
