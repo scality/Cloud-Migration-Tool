@@ -29,6 +29,49 @@
 #include <sys/time.h>
 
 #include "cloudmig.h"
+#include "options.h"
+
+static int
+create_parent_dirs(struct cloudmig_ctx *ctx,
+                   struct file_transfer_state *filestate)
+{
+    char    *nextdelim = filestate->dst;
+    char    *delim = gl_options->delimiter ? gl_options->delimiter : "/";
+    int     delimlen = strlen(delim);
+    dpl_status_t    dplret = DPL_SUCCESS;
+
+    cloudmig_log(INFO_LVL,
+                 "[Migrating]: Creating parent directories of file %s.\n",
+                 filestate->name);
+
+    while ((nextdelim = strstr(nextdelim, delim)) != NULL)
+    {
+        /*
+         * TODO FIXME Do it with right attributes
+         * FIXME : WORKAROUND : replace the current delimiter by a nul char
+         * Since the dpl_mkdir function seems to fail when the last char is a delim
+         */
+        *nextdelim = '\0';
+        cloudmig_log(INFO_LVL, "[Migrating]: Creating parent directory %s.\n",
+                     filestate->dst);
+        dplret = dpl_mkdir(ctx->dest_ctx, filestate->dst);
+        *nextdelim = delim[0];
+        cloudmig_log(DEBUG_LVL,
+                     "[Migrating]: Parent directory creation status : %s.\n",
+                     dpl_status_str(dplret));
+        if (dplret != DPL_SUCCESS && (dplret != DPL_ENOENT || dplret != DPL_EEXIST))
+            goto err;
+        // Now bypass current delimiter.
+        nextdelim += delimlen;
+    }
+    cloudmig_log(INFO_LVL,
+                 "[Migrating]: Parent directories created with success !\n");
+    return EXIT_SUCCESS;
+err:
+    PRINTERR("[Migrating]: Could not create parent directories : %s\n",
+             dpl_status_str(dplret));
+    return EXIT_FAILURE;
+}
 
 struct data_transfer
 {
@@ -91,6 +134,12 @@ transfer_file(struct cloudmig_ctx* ctx,
     filestate->name);
 
 
+    if (gl_options->flags & AUTO_CREATE_DIRS)
+    {
+        if (create_parent_dirs(ctx, filestate) == EXIT_FAILURE)
+            goto err;
+    }
+
     /*
      * First, open the destination file for writing, after
      * retrieving the source file's canned acl.
@@ -150,7 +199,8 @@ transfer_file(struct cloudmig_ctx* ctx,
                  filestate->name);
 
 err:
-
+    if (cb_data.hfile)
+        dpl_close(cb_data.hfile);
     return ret;
 }
 

@@ -36,6 +36,7 @@ enum cloudmig_flags
     QUIET               = 1 << 5,
     DELETE_SOURCE_DATA  = 1 << 6,
     BACKGROUND_MODE     = 1 << 7,
+    AUTO_CREATE_DIRS    = 1 << 8,
 };
 
 struct cloudmig_options

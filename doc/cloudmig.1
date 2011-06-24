@@ -217,9 +217,22 @@ if one encounters some issues with the tool. Each character of the
 \fB\-\-delimiter\fP=\fIdelimiter_string\fP
 .RS
 Choose the delimiter to use to identify the virtual directories on the storage.
-By default, if no directory exists, but there is a file with a '/' within its
-name, the tool won't be able to transfer the file. This option allows to
-overcome this limitation.
+By default, the delimiter is "/". This is useful when no directory exists, but
+there is a file with a '/' within its name, the tool won't be able to transfer
+the file. This option allows to overcome this limitation. See the
+\-\-create\-directories options to see another way to bypass this limitation on
+the virtual directory management on the storage data.
+.RE
+
+\fB\-\-create\-directories
+.RS
+Enables the automatic creation of virtual directories inside the destination
+storage account. Each one of those virtual directories is actually an empty
+file used as a directory. By default, the tool fails on the transfer of a file
+which name contains the delimiter if no directory file associated exists.
+This options allows to create the missing directory file, thus avoiding the
+failure of the transfer. Another way to prevent it may be the \-\-delimiter
+option.
 .RE
 
 

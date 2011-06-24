@@ -211,23 +211,24 @@ int retrieve_opts(int argc, char* argv[])
     static struct option    long_options[] = {
 //      {name, has_arg, flagptr, returned_val}
         /* Behavior-related options         */
-        {"delete-source",   no_argument,        0,  0 },
-        {"background",      no_argument,        0,  0 },
-        {"delimiter",       required_argument,  0,  0 },
+        {"delete-source",       no_argument,        0,  0 },
+        {"background",          no_argument,        0,  0 },
+        {"delimiter",           required_argument,  0,  0 },
+        {"create-directories",  no_argument,        0,  0 },
         /* Configuration-related options    */
-        {"src-profile",     required_argument,  0, 's'},
-        {"dst-profile",     required_argument,  0, 'd'},
-        {"buckets",         required_argument,  0, 'b'},
-        {"config",          required_argument,  0, 'c'},
+        {"src-profile",         required_argument,  0, 's'},
+        {"dst-profile",         required_argument,  0, 'd'},
+        {"buckets",             required_argument,  0, 'b'},
+        {"config",              required_argument,  0, 'c'},
         /* Status-related options           */
-//      {"ignore-status",   no_argument,        0, 'i'},
-        {"force-resume",    no_argument,        0, 'r'},
+//      {"ignore-status",       no_argument,        0, 'i'},
+        {"force-resume",        no_argument,        0, 'r'},
         /* Verbose/Log-related options      */
-        {"verbose",         required_argument,  0, 'v'},
-        {"droplet-trace",   required_argument,  0, 't'},
-        {"output",          required_argument,  0, 'o'},
+        {"verbose",             required_argument,  0, 'v'},
+        {"droplet-trace",       required_argument,  0, 't'},
+        {"output",              required_argument,  0, 'o'},
         /* Last element                     */
-        {0, 0, 0, 0}
+        {0,                     0,                  0,  0 }
     };
 
     while ((cur_opt = getopt_long(argc, argv,
@@ -249,6 +250,9 @@ int retrieve_opts(int argc, char* argv[])
                 break ;
             case 2: // delimiter
                 gl_options->delimiter = optarg;
+                break ;
+            case 4: // create-directories
+                gl_options->flags |= AUTO_CREATE_DIRS;
                 break ;
             }
             break ;

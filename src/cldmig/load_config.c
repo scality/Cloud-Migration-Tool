@@ -340,6 +340,13 @@ config_update_options(struct cldmig_config *conf,
         }
         else if (strcmp(key, "delimiter") == 0)
             gl_options->delimiter = val;
+        else if (strcmp(key, "create-directories") == 0)
+        {
+            if (strcmp(val, "true") == 0)
+                gl_options->flags |= AUTO_CREATE_DIRS;
+            else if (gl_options->flags & AUTO_CREATE_DIRS)
+                gl_options->flags ^= AUTO_CREATE_DIRS;
+        }
     }
     else
         PRINTERR("[Loading Config]: Invalid section name '%s'.\n", section);
