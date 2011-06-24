@@ -37,7 +37,12 @@
 static dpl_ftype_t
 get_migrating_file_type(struct file_transfer_state* filestate)
 {
-    if (filestate->name[strlen(filestate->name) - 1] == '/')
+    char * delim = "/";
+    if (gl_options->delimiter)
+        delim = gl_options->delimiter;
+
+    if (strcmp(&filestate->name[strlen(filestate->name) - strlen(delim)],
+               delim) == 0)
         return DPL_FTYPE_DIR;
     return DPL_FTYPE_REG;
 }

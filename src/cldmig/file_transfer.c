@@ -163,16 +163,16 @@ create_directory(struct cloudmig_ctx* ctx,
     dpl_status_t    dplret = DPL_SUCCESS;
 
     cloudmig_log(INFO_LVL,
-                 "[Migrating] : file '%s' is a directory : creating dest dir...\n",
-                 filestate->name);
+"[Migrating] : file '%s' is a directory (delim=\"%s\"): creating dest dir...\n",
+             filestate->name, ctx->src_ctx->delim);
 
     /* 
-     * FIXME : WORKAROUND : replace the last slash by a nul char
-     * Since the dpl_mkdir function seems to fail when the last char is a slash
+     * FIXME : WORKAROUND : replace the last delimiter by a nul char
+     * Since the dpl_mkdir function seems to fail when the last char is a delim
      */
-    filestate->dst[strlen(filestate->dst) - 1] = 0;
+    filestate->dst[strlen(filestate->dst) - strlen(ctx->src_ctx->delim)] = 0;
     dplret = dpl_mkdir(ctx->dest_ctx, filestate->dst);
-    filestate->dst[strlen(filestate->dst)] = '/';
+    filestate->dst[strlen(filestate->dst)] = ctx->src_ctx->delim[0];
     // TODO FIXME With correct attributes
     if (dplret != DPL_SUCCESS)
     {
