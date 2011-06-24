@@ -338,6 +338,8 @@ config_update_options(struct cldmig_config *conf,
                     gl_options->logfile = file;
             }
         }
+        else if (strcmp(key, "delimiter") == 0)
+            gl_options->delimiter = val;
     }
     else
         PRINTERR("[Loading Config]: Invalid section name '%s'.\n", section);
