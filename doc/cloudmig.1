@@ -326,4 +326,21 @@ When transferring a file, the canned_acl are calculated from the file's whole
 acl xml. Two of the six canned_acl defined in the S3 API aren't supported at
 the moment, and will default to a private file acl.
 
+.P
+\fITracker issue #32\fP : \fBTransfer of files which name contains the
+directory delimiter
+.br
+The droplet library used by the tool manages the files and directories with a
+delimiter (by default "/"). In the event a filename contains the delimiter, but
+no associated directory (an empty file) exists, the tool can not create the
+file.
+.br
+Two possible workarounds were designed to unlock this situation : the
+options \-\-create\-directories, which automatically creates the missing
+directory files, and \-\-delimiter which allows to specify the delimiter to be
+used for directory recognition. By using an abberant delimiter
+(e.g. "\255\255\255"), one could avoid creating unwanted "directory files"
+while migrating. Otherwise, by creating the directories (which prevents
+getting an exact copy of the source account) automatically, the problem can
+be solved. Therefore, choose your workaround wisely, depending on the situation.
 
