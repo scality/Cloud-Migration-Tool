@@ -106,8 +106,8 @@ int main(int argc, char* argv[])
     // Now set the delimiter if needed, since the ctx are allocated
     if (gl_options->delimiter)
     {
-        ctx->src_ctx->delim = gl_options->delimiter;
-        ctx->dest_ctx->delim = gl_options->delimiter;
+        ctx.src_ctx->delim = gl_options->delimiter;
+        ctx.dest_ctx->delim = gl_options->delimiter;
     }
 
     if (setup_var_pid_and_sock(ctx.src_ctx->host,
