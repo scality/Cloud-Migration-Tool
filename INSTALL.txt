@@ -34,14 +34,14 @@ I - Requirements
 
 a) Building Tools
 
-Two tools are required in order to build the tool :
+Two tools are required in order to build the tool:
  - cmake (minimum version: 2.4)
  - C compiler (support of the c99 standard needed)
 
 
 b) Library dependencies
 
-In order to build the cloud migration tool, you will need to have installed :
+In order to build the cloud migration tool, you will need to have installed:
  - libdroplet (depends on libXml2)
  - libcurses
  - libmenu
@@ -53,21 +53,22 @@ II - Building the tool
 a) Setup using CMake
 
 As cmake searches and sets most of the information it needs, you may not have
-anything to setup beforehand if your cmake version is properly installed. That
-being said, some cmake variables are setup to help personalize the build,
-depending on your build environment (those are all facultative):
- - DROPLET_PATH             (the path of droplet installation: helps finding it)
- - MENU_PATH                (the path of libmenu : helps finding it)
+anything to set up beforehand if your cmake version is properly installed. That
+said, some cmake variables can help personalize the build, depending on your 
+build environment (these are all facultative):
+ - DROPLET_PATH             (the path of droplet installation: helps find it)
+ - MENU_PATH                (the path of libmenu : helps find it)
  - CLDMIG_INSTALL_PREFIX    (the installation directory for 'make install')
  - CLDMIG_PKG_TYPE          (the type of package to build with 'make package')
 
-These cmake variables are to be defined when typing the cmake command with the
--D option :
+Define these cmake variables when typing the cmake command with the -D option:
 $> cmake -D THE_VARIABLE=the_value -D ANOTHER_VARIABLE=the_other_value
 
-In order to keep the source directory clean while building, we advice to create
-a build directory wherever you want. Then go into it and launch the cmake tool
-with the source directory root's path as an argument. Here is an example :
+To keep the source directory clean while building, create an empty build 
+directory wherever you want. Then change to the build directory and launch 
+the cmake tool with the source directory root's path as an argument. 
+
+Here is an example:
 
 $> pwd
 /home/$USER/downloads/cloudmig
@@ -76,22 +77,20 @@ $> cd build
 $> cmake ..
 
 
-If the cmake command outputs any error, then you may be missing a dependency.
-Read carefully cmake's output, and you should be able to understand which you
-are missing.
+If the cmake command outputs an error, then you may be missing a dependency.
+Read cmake's output carefully to understand which dependency you are missing.
 
 
 b) Compiling the tool
 
-If the cmake tool did not output any error then the only thing left to do is
-to launch the make utility. Here's the example :
+If the cmake tool does not output an error, then launch the make utility:
 
 $> pwd
 /home/$USER/downloads/cloudmig/build
 $> make
 
-The binary of both the tool(cloudmig) and its viewer(cloudmig-view) will be
-place in the bin/ directory of your build root.
+The binary of both the tool (cloudmig) and its viewer (cloudmig-view) will be
+created in the bin/ directory of your build root.
 
 
 
@@ -134,7 +133,7 @@ The distributed packages will install the files into the /usr directory. If you
 want to install the tool within a different directory, the packages must be
 built from the source, while defining the CMake variable CLDMIG_INSTALL_PREFIX.
 
-Currently, two packages are available :
+Currently, two packages are available:
  - A deb package;
  - A rpm package.
 
@@ -145,14 +144,14 @@ In order to build your own package from the source (that may be in order to be
 able to delete the source directory and still be able to uninstall the tool
 whenever you want), you must first follow the steps for building, and you
 may want to define the CMake variable CLDMIG_INSTALL_PREFIX in order for the
-package to install the files somewhere other than in /usr. For example :
+package to install the files somewhere other than in /usr. For example:
 $> cmake -D CLDMIG_INSTALL_PREFIX=/usr/local ..
 
 This will setup CMake to build a package that will install its files into the
 /usr/local directory.
 
 All that is left is to build the package itself with the make command and you
-will be ready to install or distribute it :
+will be ready to install or distribute it:
 $> make package.
 
 
