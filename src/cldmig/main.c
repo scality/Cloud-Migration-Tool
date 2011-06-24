@@ -59,9 +59,8 @@ int main(int argc, char* argv[])
     int     ret = EXIT_FAILURE;
     time_t  starttime = 0;
     time_t  difftime = 0;
-    struct cldmig_config conf = {{0}, {0}, 0, 0};
-	struct cloudmig_options options = {0, 0, 0, 0, 1,
-                                       NULL, NULL, NULL, NULL, NULL, NULL};
+    struct cldmig_config conf = CONF_INITIALIZER;
+	struct cloudmig_options options = OPTIONS_INITIALIZER;
 
     cloudmig_openlog(NULL); // set stderr as logger for the time being...
 
@@ -93,8 +92,7 @@ int main(int argc, char* argv[])
     // Start the main program : Setup log, load profiles, and start migration.
     cloudmig_openlog(options.logfile);
 
-    struct cloudmig_ctx     ctx =
-        {NULL, NULL, -1, {{{0, 0, 0, 0}, 0, NULL}, NULL, 0, 0, NULL}, NULL};
+    struct cloudmig_ctx     ctx = CTX_INITIALIZER;
     ctx.tinfos = calloc(options.nb_threads, sizeof(*ctx.tinfos));
     if (ctx.tinfos == NULL)
     {
@@ -104,6 +102,13 @@ int main(int argc, char* argv[])
 
     if (load_profiles(&ctx) == EXIT_FAILURE)
         goto failure;
+
+    // Now set the delimiter if needed, since the ctx are allocated
+    if (gl_options->delimiter)
+    {
+        ctx->src_ctx->delim = gl_options->delimiter;
+        ctx->dest_ctx->delim = gl_options->delimiter;
+    }
 
     if (setup_var_pid_and_sock(ctx.src_ctx->host,
                                ctx.dest_ctx->host) == EXIT_FAILURE)

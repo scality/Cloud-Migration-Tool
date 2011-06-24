@@ -51,7 +51,24 @@ struct cloudmig_options
     char        **src_buckets;
     char        **dst_buckets;
     char        *config;
+    char        *delimiter;
 };
+
+#define OPTIONS_INITIALIZER \
+{                           \
+    0,                      \
+    0,                      \
+    0,                      \
+    0,                      \
+    1,                      \
+    NULL,                   \
+    NULL,                   \
+    NULL,                   \
+    NULL,                   \
+    NULL,                   \
+    NULL,                   \
+    NULL                    \
+}
 
 // Used by config parser as well as command line arguments parser.
 int opt_buckets(char *arg);

@@ -56,7 +56,7 @@ struct cldmig_config
     int     src_entry_count;
     int     dst_entry_count;
 };
-
+#define CONF_INITIALIZER {{0}, {0}, 0, 0}
 
 /*
  * This structure gives information about one thread current actions
@@ -81,7 +81,7 @@ struct cloudmig_ctx
     struct cloudmig_status  status;
     struct cldmig_info      *tinfos;
 };
-
+#define CTX_INITIALIZER { NULL, NULL, -1, STATUS_INITIALIZER, NULL }
 
 /*
  * Required prototypes

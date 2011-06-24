@@ -213,6 +213,7 @@ int retrieve_opts(int argc, char* argv[])
         /* Behavior-related options         */
         {"delete-source",   no_argument,        0,  0 },
         {"background",      no_argument,        0,  0 },
+        {"delimiter",       required_argument,  0,  0 },
         /* Configuration-related options    */
         {"src-profile",     required_argument,  0, 's'},
         {"dst-profile",     required_argument,  0, 'd'},
@@ -230,7 +231,7 @@ int retrieve_opts(int argc, char* argv[])
     };
 
     while ((cur_opt = getopt_long(argc, argv,
-                                  "-s:d:b:r:t:",
+                                  "-s:d:b:c:r:v:t:o:",
                                   long_options, &option_index)) != -1)
     {
         switch (cur_opt)
@@ -245,6 +246,9 @@ int retrieve_opts(int argc, char* argv[])
             case 1: // background mode
                 // In background mode, the tool should be fully silent
                 gl_options->flags |= BACKGROUND_MODE;
+                break ;
+            case 2: // delimiter
+                gl_options->delimiter = optarg;
                 break ;
             }
             break ;

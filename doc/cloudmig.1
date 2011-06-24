@@ -192,7 +192,8 @@ Available verbosity level are :
 \fB\-\-droplet\-trace\fP=\fIoption_string\fP
 .RS
 Enables the Droplet libary's traces. This is mainly an option for debugging
-if one encounters some issues with the tool. Each character of the \fIoption_string\fP matches one type of trace :
+if one encounters some issues with the tool. Each character of the
+\fIoption_string\fP matches one type of trace :
 .br
     \fBn\fP: network/connection traces
 .br
@@ -211,6 +212,14 @@ if one encounters some issues with the tool. Each character of the \fIoption_str
     \fBf\fP: droplet vfile traces (file simulations)
 .br
     \fBb\fP: droplet buffer traces.
+.RE
+
+\fB\-\-delimiter\fP=\fIdelimiter_string\fP
+.RS
+Choose the delimiter to use to identify the virtual directories on the storage.
+By default, if no directory exists, but there is a file with a '/' within its
+name, the tool won't be able to transfer the file. This option allows to
+overcome this limitation.
 .RE
 
 

@@ -54,6 +54,7 @@ struct cldmig_state_header
     uint64_t    nb_objects;
     uint64_t    done_objects;
 };
+#define STATE_HEAD_INITIALIZER {0, 0, 0, 0}
 
 struct cldmig_state_entry
 {
@@ -75,6 +76,7 @@ struct cldmig_status
     size_t                      size;
     char                        *buf;
 };
+#define GENERAL_STATUS_INITIALIZER { STATE_HEAD_INITIALIZER, 0, NULL }
 
 /***********************************************************************\
 *                                                                       *
@@ -141,6 +143,7 @@ struct cloudmig_status
     int                     cur_state;          // index of the current state
     struct transfer_state   *bucket_states;     // ptr on the table of states
 };
+#define STATUS_INITIALIZER { GENERAL_STATUS_INITIALIZER, NULL, 0, 0, NULL }
 
 
 #endif /* ! __TRANSFER_STATE_H__ */
