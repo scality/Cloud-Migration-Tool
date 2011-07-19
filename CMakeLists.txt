@@ -116,6 +116,9 @@ INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/inc
                     ${PROJECT_BINARY_DIR}/inc
 )
 
+# This prevent the paths to the libraries to be removed at install time.
+SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
 ADD_SUBDIRECTORY(src)
 
 INCLUDE(CPack)
