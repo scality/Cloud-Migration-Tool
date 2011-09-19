@@ -182,6 +182,7 @@ transfer_file(struct cloudmig_ctx* ctx,
                  __FUNCTION__, filestate->dst,
                  dpl_status_str(dplret));
     }
+    cb_data.hfile = NULL;
 
     ret = EXIT_SUCCESS;
 
