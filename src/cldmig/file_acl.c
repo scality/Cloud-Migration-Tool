@@ -306,8 +306,11 @@ get_file_canned_acl(dpl_ctx_t* ctx, char *filename)
     *filename = '\0';
     ++filename;
 
-    dplret = dpl_get(ctx, bucket, filename, "acl", NULL,
-                     &buffer, &bufsize, NULL);
+    dplret = dpl_get(ctx, bucket, filename, "acl", 
+#if defined(DPL_VERSION_MAJOR) && defined(DPL_VERSION_MINOR) && DPL_VERSION_MAJOR >= 0 && DPL_VERSION_MINOR >= 2
+                     DPL_FTYPE_ANY,
+#endif
+                     NULL, &buffer, &bufsize, NULL);
     if (dplret != DPL_SUCCESS)
     {
         cloudmig_log(INFO_LVL,
