@@ -39,7 +39,7 @@ static int create_status_bucket(struct cloudmig_ctx* ctx)
     assert(ctx->status.bucket_name != NULL);
 
     dpl_status_t    ret;
-
+    
     cloudmig_log(DEBUG_LVL, "[Creating Status]: Creating status bucket...\n");
 
     ret = dpl_make_bucket(ctx->src_ctx, ctx->status.bucket_name,

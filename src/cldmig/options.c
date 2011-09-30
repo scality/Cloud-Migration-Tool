@@ -100,13 +100,13 @@ opt_trace(char *arg)
             gl_options->trace_flags |= DPL_TRACE_REQ;
             break ;
         case 'c': // conv = droplet conv api
-            gl_options->trace_flags |= DPL_TRACE_CONV;
+            gl_options->trace_flags |= DPL_TRACE_REST;
             break ;
         case 'd': // dir = droplet vdir api
-            gl_options->trace_flags |= DPL_TRACE_VDIR;
+            gl_options->trace_flags |= DPL_TRACE_VFS;
             break ;
         case 'f': // file = droplet vfile api
-            gl_options->trace_flags |= DPL_TRACE_VFILE;
+            gl_options->trace_flags |= DPL_TRACE_ID;
             break ;
         case 'b': // buffers
             gl_options->trace_flags |= DPL_TRACE_BUF;
