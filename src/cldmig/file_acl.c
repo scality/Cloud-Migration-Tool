@@ -307,7 +307,7 @@ get_file_canned_acl(dpl_ctx_t* ctx, char *filename)
     ++filename;
 
     dplret = dpl_get(ctx, bucket, filename, "acl", 
-#if defined(DPL_VERSION_MAJOR) && defined(DPL_VERSION_MINOR) && DPL_VERSION_MAJOR >= 0 && DPL_VERSION_MINOR >= 2
+#if defined(DPL_VERSION_MAJOR) && defined(DPL_VERSION_MINOR) && (DPL_VERSION_MAJOR == 0 && DPL_VERSION_MINOR >= 2) || (DPL_VERSION_MAJOR > 0)
                      DPL_FTYPE_ANY,
 #endif
                      NULL, &buffer, &bufsize, NULL);
