@@ -338,8 +338,6 @@ config_update_options(struct cldmig_config *conf,
                     gl_options->logfile = file;
             }
         }
-        else if (strcmp(key, "delimiter") == 0)
-            gl_options->delimiter = val;
         else if (strcmp(key, "create-directories") == 0)
         {
             if (strcmp(val, "true") == 0)

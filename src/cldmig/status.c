@@ -33,6 +33,8 @@
 #include "cloudmig.h"
 #include "options.h"
 
+#include <droplet/vfs.h>
+
 /*
  *
  * This file contains a collection of functions used to manipulate
@@ -40,7 +42,6 @@
  *
  *
  * Here is a list of static functions :
- * static char*         compute_status_bucket(struct cloudmig_ctx* ctx);
  * static int           create_status_bucket(struct cloudmig_ctx* ctx);
  * static size_t        calc_status_file_size(dpl_object_t** objs, int n_items);
  * static int           create_status_file(struct cloudmig_ctx* ctx,
@@ -59,14 +60,11 @@
  *
  * This function returns a buffer of allocated memory that has to be freed
  */
-char*     compute_status_bucket(struct cloudmig_ctx* ctx)
+char*     compute_status_bucket(char *src_host, char *dst_host)
 {
     // Those should not be invalid.
-    assert(ctx);
-    assert(ctx->src_ctx);
-    assert(ctx->src_ctx->host);
-    assert(ctx->dest_ctx);
-    assert(ctx->dest_ctx->host);
+    assert(src_host != NULL);
+    assert(dst_host != NULL);
 
     char* name = 0;
     int len = 0;
@@ -74,7 +72,7 @@ char*     compute_status_bucket(struct cloudmig_ctx* ctx)
      * result string will be of the form :
      * "cloudmig_srchostname_to_desthostname"
      */
-    len = 9 + strlen(ctx->src_ctx->host) + 4 + strlen(ctx->dest_ctx->host);
+    len = 9 + strlen(src_host) + 4 + strlen(dst_host);
     if (len < 255)
     {
         if ((name = calloc(sizeof(*name), len + 1)) == NULL)
@@ -84,16 +82,16 @@ char*     compute_status_bucket(struct cloudmig_ctx* ctx)
             return (NULL);
         }
         strcpy(name, "cloudmig.");
-        strcat(name, ctx->src_ctx->host);
+        strcat(name, src_host);
         strcat(name, ".to.");
-        strcat(name, ctx->dest_ctx->host);
+        strcat(name, dst_host);
     }
     else
         return (strdup("cloudmig.status"));
     return (name);
 }
 
-int load_status(struct cloudmig_ctx* ctx)
+int load_status(struct cloudmig_ctx* ctx, char *src_host, char *dst_host)
 {
      assert(ctx);
     int             ret = EXIT_SUCCESS;
@@ -105,7 +103,7 @@ int load_status(struct cloudmig_ctx* ctx)
 
     // First, make sure we have a status bucket defined.
     if (ctx->status.bucket_name == NULL)
-        ctx->status.bucket_name = compute_status_bucket(ctx);
+        ctx->status.bucket_name = compute_status_bucket(src_host, dst_host);
     if (ctx->status.bucket_name == NULL)
         return (EXIT_FAILURE);
 
@@ -125,7 +123,7 @@ int load_status(struct cloudmig_ctx* ctx)
     }
     for (int i = 0; i < src_buckets->n_items; ++i)
     {
-        if (strcmp(((dpl_bucket_t**)(src_buckets->array))[i]->name,
+        if (strcmp(((dpl_bucket_t*)(src_buckets->items[i]->ptr))->name,
                    ctx->status.bucket_name) == 0)
         {
             cloudmig_log(DEBUG_LVL,
@@ -378,13 +376,10 @@ int		status_update_entry(struct cloudmig_ctx *ctx,
         htonl(done_offset + 1);
     // TODO Unlock bst
 
-    dplret = dpl_openwrite(ctx->src_ctx,
-                           bst->filename,
-                           DPL_VFILE_FLAG_MD5,
-                           NULL, // metadata
-                           DPL_CANNED_ACL_PRIVATE,
-                           bst->size,
-                           &hfile);
+    dplret = dpl_openwrite(ctx->src_ctx, bst->filename,
+                           DPL_FTYPE_REG, DPL_VFILE_FLAG_MD5,
+			   NULL, NULL/* MD */, NULL /* SYSMD */,
+                           bst->size, NULL, &hfile);
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not open status file %s for updating.\n",
@@ -424,13 +419,10 @@ int		status_update_entry(struct cloudmig_ctx *ctx,
         htobe64(ctx->status.general.head.done_sz);
     ((struct cldmig_state_header*)ctx->status.general.buf)->done_objects =
         htobe64(ctx->status.general.head.done_objects);
-    dplret = dpl_openwrite(ctx->src_ctx,
-                           ".cloudmig",
-                           DPL_VFILE_FLAG_MD5,
-                           NULL,
-                           DPL_CANNED_ACL_PRIVATE,
-                           ctx->status.general.size,
-                           &hfile_genst);
+    dplret = dpl_openwrite(ctx->src_ctx, ".cloudmig",
+                           DPL_FTYPE_REG, DPL_VFILE_FLAG_MD5,
+                           NULL, NULL/*md*/, NULL/*sysmd*/,
+                           ctx->status.general.size, NULL, &hfile_genst);
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not open general status file for update.\n",

@@ -90,7 +90,7 @@ int     retrieve_opts(int argc, char *argv[]);
 int     load_config(struct cldmig_config *conf);
 int     setup_var_pid_and_sock(char *src, char *dst);
 int     load_profiles(struct cloudmig_ctx *ctx);
-int     load_status(struct cloudmig_ctx *ctx);
+int     load_status(struct cloudmig_ctx *ctx, char *src_host, char *dst_host);
 int     status_next_incomplete_entry(struct cloudmig_ctx *ctx,
                                      struct file_transfer_state *filestate);
 int		status_update_entry(struct cloudmig_ctx *ctx,
@@ -113,7 +113,7 @@ dpl_canned_acl_t    get_file_canned_acl(dpl_ctx_t* ctx, char *filename);
  *
  * From create_status.c, retrieve_status.c and status.c
  */
-char*   compute_status_bucket(struct cloudmig_ctx *ctx);
+char*   compute_status_bucket(char *src_host, char *dst_host);
 int     create_status(struct cloudmig_ctx *ctx, dpl_vec_t *buckets);
 int     create_buckets_status(struct cloudmig_ctx *ctx);
 int     status_retrieve_states(struct cloudmig_ctx* ctx);

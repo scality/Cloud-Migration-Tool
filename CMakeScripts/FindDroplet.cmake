@@ -35,7 +35,7 @@ IF (NOT DROPLET_FOUND)
     FIND_PATH(DROPLET_INCLUDE_DIR
               PATHS ${DROPLET_PATH}/include
               NAMES droplet.h
-              PATH_SUFFIXES droplet droplet-1.0
+              PATH_SUFFIXES droplet droplet-1.0 droplet-2.0 droplet-3.0
     )
 
     # If it was found, we should be able to find the library too...

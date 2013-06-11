@@ -31,20 +31,20 @@
 #include "cloudmig.h"
 #include "options.h"
 
+#include <droplet/vfs.h>
+
 static int
 create_parent_dirs(struct cloudmig_ctx *ctx,
                    struct file_transfer_state *filestate)
 {
     char    *nextdelim = filestate->dst;
-    char    *delim = gl_options->delimiter ? gl_options->delimiter : "/";
-    int     delimlen = strlen(delim);
     dpl_status_t    dplret = DPL_SUCCESS;
 
     cloudmig_log(INFO_LVL,
                  "[Migrating]: Creating parent directories of file %s.\n",
                  filestate->name);
 
-    while ((nextdelim = strstr(nextdelim, delim)) != NULL)
+    while ((nextdelim = strchr(nextdelim, '/')) != NULL)
     {
         /*
          * TODO FIXME Do it with right attributes
@@ -54,15 +54,15 @@ create_parent_dirs(struct cloudmig_ctx *ctx,
         *nextdelim = '\0';
         cloudmig_log(INFO_LVL, "[Migrating]: Creating parent directory %s.\n",
                      filestate->dst);
-        dplret = dpl_mkdir(ctx->dest_ctx, filestate->dst);
-        *nextdelim = delim[0];
+        dplret = dpl_mkdir(ctx->dest_ctx, filestate->dst, NULL/*MD*/, NULL/*SYSMD*/);
+        *nextdelim = '/';
         cloudmig_log(DEBUG_LVL,
                      "[Migrating]: Parent directory creation status : %s.\n",
                      dpl_status_str(dplret));
         if (dplret != DPL_SUCCESS && (dplret != DPL_ENOENT || dplret != DPL_EEXIST))
             goto err;
         // Now bypass current delimiter.
-        nextdelim += delimlen;
+        nextdelim++;
     }
     cloudmig_log(INFO_LVL,
                  "[Migrating]: Parent directories created with success !\n");
@@ -127,7 +127,6 @@ transfer_file(struct cloudmig_ctx* ctx,
     int                     ret = EXIT_FAILURE;
     dpl_status_t            dplret;
     struct data_transfer    cb_data = { .hfile=NULL, .ctx=ctx };
-    dpl_canned_acl_t        can_acl;
 
     cloudmig_log(INFO_LVL,
     "[Migrating] : file '%s' is a regular file : starting transfer...\n",
@@ -144,13 +143,10 @@ transfer_file(struct cloudmig_ctx* ctx,
      * First, open the destination file for writing, after
      * retrieving the source file's canned acl.
      */
-    can_acl = get_file_canned_acl(ctx->src_ctx, filestate->name);
     dplret = dpl_openwrite(ctx->dest_ctx, filestate->dst,
-                           DPL_VFILE_FLAG_CREAT,
-                           NULL, // metadata
-                           can_acl,
-                           filestate->fixed.size,
-                           &cb_data.hfile);
+                           DPL_FTYPE_REG, DPL_VFILE_FLAG_CREAT,
+                           NULL, NULL /*MD*/, NULL/*SYSMD*/,
+                           filestate->fixed.size, NULL, &cb_data.hfile);
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not open dest file %s: %s\n",
@@ -164,9 +160,9 @@ transfer_file(struct cloudmig_ctx* ctx,
      */
     dplret = dpl_openread(ctx->src_ctx, filestate->name,
                           DPL_VFILE_FLAG_MD5,
-                          NULL, // condition
+                          NULL/*cond*/, NULL /*range*/,
                           transfer_data_chunk, &cb_data, // reading cb,data
-                          NULL); // metadatap
+                          NULL/*MD*/, NULL/*sysmd*/);
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not open source file %s: %s\n",
@@ -214,16 +210,16 @@ create_directory(struct cloudmig_ctx* ctx,
     dpl_status_t    dplret = DPL_SUCCESS;
 
     cloudmig_log(INFO_LVL,
-"[Migrating] : file '%s' is a directory (delim=\"%s\"): creating dest dir...\n",
-             filestate->name, ctx->src_ctx->delim);
+"[Migrating] : file '%s' is a directory: creating dest dir...\n",
+             filestate->name);
 
     /* 
      * FIXME : WORKAROUND : replace the last delimiter by a nul char
      * Since the dpl_mkdir function seems to fail when the last char is a delim
      */
-    filestate->dst[strlen(filestate->dst) - strlen(ctx->src_ctx->delim)] = 0;
-    dplret = dpl_mkdir(ctx->dest_ctx, filestate->dst);
-    filestate->dst[strlen(filestate->dst)] = ctx->src_ctx->delim[0];
+    filestate->dst[strlen(filestate->dst) - 1] = 0;
+    dplret = dpl_mkdir(ctx->dest_ctx, filestate->dst, NULL/*MD*/, NULL/*SYSMD*/);
+    filestate->dst[strlen(filestate->dst)] = '/';
     // TODO FIXME With correct attributes
     if (dplret != DPL_SUCCESS)
     {

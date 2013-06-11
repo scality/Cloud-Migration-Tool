@@ -32,6 +32,8 @@
 
 #include "cloudmig.h"
 
+#include <droplet/vfs.h>
+
 struct migration_status
 {
     char    *buf;
@@ -76,9 +78,9 @@ static int status_retrieve_associated_buckets(struct cloudmig_ctx* ctx,
 
     dplret = dpl_openread(ctx->src_ctx, ".cloudmig",
                           DPL_VFILE_FLAG_MD5,
-                          NULL,
+                          NULL/*cond*/, NULL/*range*/,
                           &migst_cb, &status,
-                          &metadata);
+                          &metadata, NULL/*sysmd*/);
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not read the general migration status file: %s.\n",
@@ -170,7 +172,7 @@ int status_retrieve_states(struct cloudmig_ctx* ctx)
 
     // Retrieve the list of files for the buckets states
     dplret = dpl_list_bucket(ctx->src_ctx, ctx->status.bucket_name,
-                             NULL, NULL, &objects, NULL);
+                             NULL, NULL, -1, &objects, NULL);
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not list status bucket's files: %s\n",
@@ -192,14 +194,14 @@ int status_retrieve_states(struct cloudmig_ctx* ctx)
     }
 
     // Now fill each one of these structures
-    dpl_object_t** objs = (dpl_object_t**)objects->array;
     int i_bucket = 0;
     for (int i=0; i < objects->n_items; ++i, ++i_bucket)
     {
-        if (strcmp(".cloudmig", objs[i]->key) == 0)
+	dpl_object_t* obj = (dpl_object_t*)(objects->items[i]->ptr);
+        if (strcmp(".cloudmig", obj->path) == 0)
         {
             // save the file size
-            migstatus_size = objs[i]->size;
+            migstatus_size = obj->size;
             // fix the nb_states of the status ctx
             --ctx->status.nb_states;
             // Now get to next entry without advancing in the bucket_states.
@@ -207,14 +209,14 @@ int status_retrieve_states(struct cloudmig_ctx* ctx)
             if (i >= objects->n_items)
                 break ;
         }
-        ctx->status.bucket_states[i_bucket].filename = strdup(objs[i]->key);
+        ctx->status.bucket_states[i_bucket].filename = strdup(obj->path);
         if (ctx->status.bucket_states[i_bucket].filename == NULL)
         {
             PRINTERR("%s: Could not allocate state data for each bucket: %s\n",
                      __FUNCTION__, strerror(errno));
             goto err;
         }
-        ctx->status.bucket_states[i_bucket].size = objs[i]->size;
+        ctx->status.bucket_states[i_bucket].size = obj->size;
         ctx->status.bucket_states[i_bucket].next_entry_off = 0;
         // The buffer will be read/allocated when needed.
         // Otherwise, it may use up too much memory

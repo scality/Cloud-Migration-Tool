@@ -28,6 +28,8 @@
 
 #include "cloudmig.h"
 
+#include <droplet/vfs.h>
+
 /*
  * Callback function for dpl_openread (needs a callback for each chunk
  * of data received)
@@ -80,9 +82,9 @@ int cloudmig_map_bucket_state(struct cloudmig_ctx* ctx,
     bucket_state->next_entry_off = 0;
     dplret = dpl_openread(ctx->src_ctx, bucket_state->filename,
                           DPL_VFILE_FLAG_MD5,
-                          NULL, // condition
+                          NULL/*cond*/, NULL/*range*/,
                           &cloudmig_append_buffer_to_bucket_state, bucket_state,
-                          &metadata);
+                          &metadata, NULL/*sysmd*/);
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not map bucket status file %s : %s\n",

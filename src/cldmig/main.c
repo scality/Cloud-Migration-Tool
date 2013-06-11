@@ -60,12 +60,16 @@ int main(int argc, char* argv[])
     time_t  starttime = 0;
     time_t  difftime = 0;
     struct cldmig_config conf = CONF_INITIALIZER;
-	struct cloudmig_options options = OPTIONS_INITIALIZER;
+    struct cloudmig_options options = OPTIONS_INITIALIZER;
+    // hosts strings for source and destination
+    char	*src_hostname = NULL;
+    char	*dst_hostname = NULL;
+    dpl_status_t	dplret = DPL_FAILURE;
 
     cloudmig_openlog(NULL); // set stderr as logger for the time being...
 
     // Initializations for the main program.
-	gl_options = &options;
+    gl_options = &options;
     starttime = time(NULL);
 
     // Retrieve options and parse config (if need be)
@@ -103,18 +107,39 @@ int main(int argc, char* argv[])
     if (load_profiles(&ctx) == EXIT_FAILURE)
         goto failure;
 
-    // Now set the delimiter if needed, since the ctx are allocated
-    if (gl_options->delimiter)
+    // Retrieve hosts strings for source/dest
     {
-        ctx.src_ctx->delim = gl_options->delimiter;
-        ctx.dest_ctx->delim = gl_options->delimiter;
-    }
+	dplret = dpl_addrlist_get_nth(ctx.src_ctx->addrlist,
+				      ctx.src_ctx->cur_host,
+				      &src_hostname, NULL, NULL, NULL);
+	if (dplret != DPL_SUCCESS)
+	{
+	    src_hostname = strdup("local_posix");
+	    if (dplret != DPL_ENOENT || src_hostname == NULL)
+	    {
+		PRINTERR("Could not retrieve host from the source addrlist", 0);
+		goto failure;
+	    }
+	}
 
-    if (setup_var_pid_and_sock(ctx.src_ctx->host,
-                               ctx.dest_ctx->host) == EXIT_FAILURE)
+	dplret = dpl_addrlist_get_nth(ctx.dest_ctx->addrlist,
+				      ctx.dest_ctx->cur_host,
+				      &dst_hostname, NULL, NULL, NULL);
+	if (dplret != DPL_SUCCESS)
+	{
+	    dst_hostname = strdup("local_posix");
+	    if (dplret != DPL_ENOENT || dst_hostname == NULL)
+	    {
+		PRINTERR("Could not retrieve host from the dest addrlist", 0);
+		goto failure;
+	    }
+	}
+    }
+    if (setup_var_pid_and_sock(src_hostname,
+                               dst_hostname) == EXIT_FAILURE)
         return (EXIT_FAILURE);
 
-    if (load_status(&ctx) == EXIT_FAILURE)
+    if (load_status(&ctx, src_hostname, dst_hostname) == EXIT_FAILURE)
         goto failure;
 
     struct cloudmig_ctx ref = ctx;
@@ -166,5 +191,9 @@ failure:
     }
     if (ctx.src_ctx)
         unsetup_var_pid_and_sock();
-	return (ret);
+    if (src_hostname)
+	free(src_hostname);
+    if (dst_hostname)
+	free(dst_hostname);
+    return (ret);
 }

@@ -33,6 +33,8 @@
 #include "cloudmig.h"
 #include "options.h"
 
+#include <droplet/vfs.h>
+
 static int create_status_bucket(struct cloudmig_ctx* ctx)
 {
     assert(ctx != NULL);
@@ -55,12 +57,12 @@ static int create_status_bucket(struct cloudmig_ctx* ctx)
     return EXIT_SUCCESS;
 }
 
-static size_t calc_status_file_size(dpl_object_t** objs, int n_items)
+static size_t calc_status_file_size(dpl_value_t** objs, int n_items)
 {
     size_t size = 0;
-    for (int i = 0; i < n_items; ++i, ++objs)
+    for (int i = 0; i < n_items; ++i)
     {
-        int len = strlen((*objs)->key);
+        int len = strlen(((dpl_object_t*)(objs[i]->ptr))->path);
         size += sizeof(struct file_state_entry); // fixed state entry data
         size += ROUND_NAMLEN(len); // namlen rounded to superior 4
     }
@@ -71,7 +73,7 @@ static int fill_entry_from_object(struct file_state_entry* entry,
                                   char** filename,
                                   dpl_object_t *obj)
 {
-    int len = strlen(obj->key);
+    int len = strlen(obj->path);
 
     entry->namlen = ROUND_NAMLEN(len);
     entry->size = obj->size;
@@ -84,7 +86,7 @@ static int fill_entry_from_object(struct file_state_entry* entry,
         return EXIT_FAILURE;
     }
     // already padded with zeroes, copy only the string
-    memcpy(*filename, obj->key, len);
+    memcpy(*filename, obj->path, len);
 
     // translate each integer into network byte order for sending...
     entry->namlen = htonl(entry->namlen);
@@ -118,7 +120,8 @@ static int create_status_file(struct cloudmig_ctx* ctx,
                  bucket_name);
 
     if ((dplret = dpl_list_bucket(ctx->src_ctx, bucket_name,
-                                  NULL, NULL, &objects, NULL)) != DPL_SUCCESS)
+                                  NULL, NULL, -1 /* no limit */,
+				  &objects, NULL)) != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not list bucket %s : %s\n", __FUNCTION__,
                  bucket_name, dpl_status_str(dplret));
@@ -141,11 +144,12 @@ static int create_status_file(struct cloudmig_ctx* ctx,
     ctx_bucket = ctx->src_ctx->cur_bucket;
     ctx->src_ctx->cur_bucket = ctx->status.bucket_name;
 
-    filesize = calc_status_file_size((dpl_object_t**)(objects->array),
+    filesize = calc_status_file_size((objects->items),
                                      objects->n_items);
-    if ((dplret = dpl_openwrite(ctx->src_ctx, *filename, DPL_VFILE_FLAG_CREAT,
-                                NULL, DPL_CANNED_ACL_PRIVATE, filesize,
-                                &bucket_status)))
+    if ((dplret = dpl_openwrite(ctx->src_ctx, *filename,
+				DPL_FTYPE_REG, DPL_VFILE_FLAG_CREAT,
+                                NULL, NULL/* MD */, NULL /* SYSMD */,
+				filesize, NULL, &bucket_status)))
     {
         PRINTERR("%s: Could not create bucket %s's status file : %s\n",
                  __FUNCTION__, bucket_name, dpl_status_str(dplret));
@@ -155,21 +159,21 @@ static int create_status_file(struct cloudmig_ctx* ctx,
     /*
      * For each file, write the part matching the file.
      */
-    dpl_object_t** cur_object = (dpl_object_t**)objects->array;
     cloudmig_log(DEBUG_LVL,
                  "[Creating status] Bucket %s (%i objects) in file '%s':\n",
                  bucket_name, objects->n_items, *filename);
     ctx->status.general.head.nb_objects += objects->n_items;
-    for (int i = 0; i < objects->n_items; ++i, ++cur_object)
+    for (int i = 0; i < objects->n_items; ++i)
     {
+	dpl_object_t *cur_object = (dpl_object_t*)(objects->items[i]->ptr);
         cloudmig_log(DEBUG_LVL, "[Creating status] \t file : '%s'(%i bytes)\n",
-                     (*cur_object)->key, (*cur_object)->size);
+                     cur_object->path, cur_object->size);
 
         // Prepare data for writing...
         if (fill_entry_from_object(&entry, &entry_filename,
-                                   *cur_object) != EXIT_SUCCESS)
+                                   cur_object) != EXIT_SUCCESS)
             goto end;
-        ctx->status.general.head.total_sz += (*cur_object)->size;
+        ctx->status.general.head.total_sz += cur_object->size;
 
         // Write data to network file
         dplret = dpl_write(bucket_status, (char*)(&entry), sizeof(entry));
@@ -358,8 +362,9 @@ static int create_cloudmig_status(struct cloudmig_ctx *ctx,
 
     // Then we can open and write it
     dplret = dpl_openwrite(ctx->src_ctx, ".cloudmig",
-                           DPL_VFILE_FLAG_CREAT,
-                           NULL, DPL_CANNED_ACL_PRIVATE, size, &stfile);
+                           DPL_FTYPE_REG, DPL_VFILE_FLAG_CREAT,
+                           NULL, NULL /*MD*/, NULL /*SYSMD*/,
+			   size, NULL, &stfile);
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not open migration status file : %s.\n",
@@ -438,10 +443,10 @@ int create_status(struct cloudmig_ctx* ctx, dpl_vec_t* buckets)
      * For each bucket, we create a file named after it in the
      * status bucket, and create the destination's bucket.
      */
-    dpl_bucket_t**  cur_bucket = (dpl_bucket_t**)buckets->array;
-    for (int i = 0; i < buckets->n_items; ++i, ++cur_bucket)
+    for (int i = 0; i < buckets->n_items; ++i)
     {
-        ret = create_status_file(ctx, (*cur_bucket)->name, &status_filename);
+	dpl_bucket_t* cur_bucket = (dpl_bucket_t*)(buckets->items[i]->ptr);
+        ret = create_status_file(ctx, cur_bucket->name, &status_filename);
         if (ret != EXIT_SUCCESS)
         {
             PRINTERR(
@@ -451,11 +456,11 @@ Please delete manually the bucket '%s' before restarting the tool...\n",
             goto err;
         }
 
-        dest_bucket_name = strdup((*cur_bucket)->name);
+        dest_bucket_name = strdup(cur_bucket->name);
         if (dest_bucket_name == NULL)
         {
             PRINTERR("[Creating Status]: Could not create status for bucket %s:"
-                     "Could not allocate memory\n", (*cur_bucket)->name);
+                     "Could not allocate memory\n", cur_bucket->name);
             goto err;
         }
 

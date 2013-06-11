@@ -108,8 +108,8 @@ opt_trace(char *arg)
         case 'f': // file = droplet vfile api
             gl_options->trace_flags |= DPL_TRACE_ID;
             break ;
-        case 'b': // buffers
-            gl_options->trace_flags |= DPL_TRACE_BUF;
+        case 'b': // backend
+            gl_options->trace_flags |= DPL_TRACE_BACKEND;
             break ;
         default:
             PRINTERR(
@@ -213,7 +213,6 @@ int retrieve_opts(int argc, char* argv[])
         /* Behavior-related options         */
         {"delete-source",       no_argument,        0,  0 },
         {"background",          no_argument,        0,  0 },
-        {"delimiter",           required_argument,  0,  0 },
         {"create-directories",  no_argument,        0,  0 },
         /* Configuration-related options    */
         {"src-profile",         required_argument,  0, 's'},
@@ -248,10 +247,7 @@ int retrieve_opts(int argc, char* argv[])
                 // In background mode, the tool should be fully silent
                 gl_options->flags |= BACKGROUND_MODE;
                 break ;
-            case 2: // delimiter
-                gl_options->delimiter = optarg;
-                break ;
-            case 4: // create-directories
+            case 2: // create-directories
                 gl_options->flags |= AUTO_CREATE_DIRS;
                 break ;
             }

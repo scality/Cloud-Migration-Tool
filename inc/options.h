@@ -52,7 +52,6 @@ struct cloudmig_options
     char        **src_buckets;
     char        **dst_buckets;
     char        *config;
-    char        *delimiter;
 };
 
 #define OPTIONS_INITIALIZER \
@@ -62,7 +61,6 @@ struct cloudmig_options
     0,                      \
     0,                      \
     1,                      \
-    NULL,                   \
     NULL,                   \
     NULL,                   \
     NULL,                   \

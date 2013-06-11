@@ -114,6 +114,7 @@ CONFIGURE_FILE(${PROJECT_SOURCE_DIR}/inc/cloudmig.h.in
 )
 INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/inc
                     ${PROJECT_BINARY_DIR}/inc
+		    /usr/include/json
 )
 
 # This prevent the paths to the libraries to be removed at install time.

@@ -38,7 +38,7 @@ static void delete_file(struct cloudmig_ctx *ctx, char *bucket, char *filename)
     cloudmig_log(DEBUG_LVL, "[Deleting Source]\t Deleting file '%s'...\n",
                  filename);
 
-    dplret = dpl_delete(ctx->src_ctx, bucket, filename, NULL);
+    dplret = dpl_delete(ctx->src_ctx, bucket, filename, NULL, DPL_FTYPE_REG, NULL);
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not delete the file %s" " from the bucket %s : %s",
@@ -55,7 +55,7 @@ static void delete_status_bucket(struct cloudmig_ctx *ctx)
     cloudmig_log(DEBUG_LVL, "[Deleting files]: Deleting status bucket...\n");
 
     dplret = dpl_list_bucket(ctx->src_ctx, ctx->status.bucket_name,
-                             NULL, NULL, &objects, NULL);
+                             NULL, NULL, -1, &objects, NULL);
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not list bucket %s for deletion : %s\n",
@@ -63,12 +63,12 @@ static void delete_status_bucket(struct cloudmig_ctx *ctx)
         goto deletebucket;
     }
 
-    dpl_object_t** cur_object = (dpl_object_t**)objects->array;
-    for (int i = 0; i < objects->n_items; ++i, ++cur_object)
-        delete_file(ctx, ctx->status.bucket_name, (*cur_object)->key);
+    for (int i = 0; i < objects->n_items; ++i)
+        delete_file(ctx, ctx->status.bucket_name,
+		    ((dpl_object_t*)(objects->items[i]->ptr))->path);
 
 deletebucket:
-    dpl_deletebucket(ctx->src_ctx, ctx->status.bucket_name);
+    dpl_delete_bucket(ctx->src_ctx, ctx->status.bucket_name);
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not delete bucket %s : %s.\n",
@@ -117,7 +117,7 @@ static void delete_source_bucket(struct cloudmig_ctx *ctx,
      * Remove bucket now that all of its files were deleted.
      */
     *dotptr = '\0';
-    dplret = dpl_deletebucket(ctx->src_ctx, bucket_state->filename);
+    dplret = dpl_delete_bucket(ctx->src_ctx, bucket_state->filename);
     if (dplret != DPL_SUCCESS)
     {
         /*
