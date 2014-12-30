@@ -520,9 +520,9 @@ int create_buckets_status(struct cloudmig_ctx* ctx)
      *
      * Here, buckets is a string table ended by NULL pointer.
      */
-    for (int i=0; gl_options->src_buckets[i]; ++i)
+    for (int i=0; ctx->options.src_buckets[i]; ++i)
     {
-        ret = create_status_file(ctx, gl_options->src_buckets[i],
+        ret = create_status_file(ctx, ctx->options.src_buckets[i],
                                  &status_filename);
         if (ret != EXIT_SUCCESS)
         {
@@ -533,11 +533,11 @@ Please delete manually the bucket '%s' before restarting the tool...\n",
             goto err;
         }
 
-        dest_bucket_name = strdup(gl_options->dst_buckets[i]);
+        dest_bucket_name = strdup(ctx->options.dst_buckets[i]);
         if (dest_bucket_name == NULL)
         {
             PRINTERR("[Creating Status]: Could not create status for bucket %s:"
-                     "Could not allocate memory\n", gl_options->src_buckets[i]);
+                     "Could not allocate memory\n", ctx->options.src_buckets[i]);
             goto err;
         }
 

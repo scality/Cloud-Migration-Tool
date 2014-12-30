@@ -34,17 +34,15 @@
 #include "cloudmig.h"
 
 
-extern enum cloudmig_loglevel gl_loglevel;
-
 int
-cloudmig_options_check(void)
+cloudmig_options_check(struct cloudmig_options *options)
 {
-    if (!gl_options->src_profile)
+    if (!options->src_profile)
     {
         PRINTERR("No source defined for the migration.\n", 0);
         return (EXIT_FAILURE);
     }
-    if (!gl_options->dest_profile)
+    if (!options->dest_profile)
     {
         PRINTERR("No destination defined for the migration.\n", 0);
         return (EXIT_FAILURE);
@@ -53,63 +51,63 @@ cloudmig_options_check(void)
 }
 
 static int
-opt_src_profile(void)
+opt_src_profile(struct cloudmig_options *options)
 {
-    if (gl_options->flags & SRC_PROFILE_NAME || gl_options->src_profile)
+    if (options->flags & SRC_PROFILE_NAME || options->src_profile)
     {
         PRINTERR("Source profile already defined.\n", 0);
         return (EXIT_FAILURE);
     }
-    gl_options->src_profile = optarg;
+    options->src_profile = optarg;
     return (EXIT_SUCCESS);
 }
 
 static int
-opt_dst_profile(void)
+opt_dst_profile(struct cloudmig_options *options)
 {
-    if (gl_options->flags & DEST_PROFILE_NAME
-        || gl_options->dest_profile)
+    if (options->flags & DEST_PROFILE_NAME
+        || options->dest_profile)
     {
         PRINTERR("Destination profile already defined.\n", 0);
         return (EXIT_FAILURE);
     }
-    gl_options->dest_profile = optarg;
+    options->dest_profile = optarg;
     return (EXIT_SUCCESS);
 }
 
 int
-opt_trace(char *arg)
+opt_trace(struct cloudmig_options *options, char *arg)
 {
     while (*arg)
     {
         switch (*arg)
         {
         case 'n': // network = connexion
-            gl_options->trace_flags |= DPL_TRACE_CONN;
+            options->trace_flags |= DPL_TRACE_CONN;
             break ;
         case 'i': // io
-            gl_options->trace_flags |= DPL_TRACE_IO;
+            options->trace_flags |= DPL_TRACE_IO;
             break ;
         case 'h': // http
-            gl_options->trace_flags |= DPL_TRACE_HTTP;
+            options->trace_flags |= DPL_TRACE_HTTP;
             break ;
         case 's': // ssl
-            gl_options->trace_flags |= DPL_TRACE_SSL;
+            options->trace_flags |= DPL_TRACE_SSL;
             break ;
         case 'r': // req = requests
-            gl_options->trace_flags |= DPL_TRACE_REQ;
+            options->trace_flags |= DPL_TRACE_REQ;
             break ;
         case 'c': // conv = droplet conv api
-            gl_options->trace_flags |= DPL_TRACE_REST;
+            options->trace_flags |= DPL_TRACE_REST;
             break ;
         case 'd': // dir = droplet vdir api
-            gl_options->trace_flags |= DPL_TRACE_VFS;
+            options->trace_flags |= DPL_TRACE_VFS;
             break ;
         case 'f': // file = droplet vfile api
-            gl_options->trace_flags |= DPL_TRACE_ID;
+            options->trace_flags |= DPL_TRACE_ID;
             break ;
         case 'b': // backend
-            gl_options->trace_flags |= DPL_TRACE_BACKEND;
+            options->trace_flags |= DPL_TRACE_BACKEND;
             break ;
         default:
             PRINTERR(
@@ -123,14 +121,14 @@ opt_trace(char *arg)
 }
 
 int
-opt_buckets(char *arg)
+opt_buckets(struct cloudmig_options *options, char *arg)
 {
     char    *src;
     char    *dst;
     int     size = 0;
     char    *next_coma = optarg;
 
-    if (gl_options->src_buckets && gl_options->dst_buckets)
+    if (options->src_buckets && options->dst_buckets)
     {
         PRINTERR("Multiple Buckets association settings !\n", 0);
         return EXIT_FAILURE;
@@ -157,17 +155,17 @@ opt_buckets(char *arg)
         // goto the first char of the dst bucket name
         size += 1;
         // Realloc src tab and set additional src.
-        gl_options->src_buckets = realloc(gl_options->src_buckets,
-                                         sizeof(*gl_options->src_buckets)
+        options->src_buckets = realloc(options->src_buckets,
+                                         sizeof(*options->src_buckets)
                                           * (size + 1));
-        gl_options->src_buckets[size - 1] = src;
-        gl_options->src_buckets[size] = NULL;
+        options->src_buckets[size - 1] = src;
+        options->src_buckets[size] = NULL;
         // Realloc dst tab and set additional dst.
-        gl_options->dst_buckets = realloc(gl_options->dst_buckets,
-                                         sizeof(*gl_options->dst_buckets)
+        options->dst_buckets = realloc(options->dst_buckets,
+                                         sizeof(*options->dst_buckets)
                                           * (size + 1));
-        gl_options->dst_buckets[size - 1] = dst;
-        gl_options->dst_buckets[size] = NULL;
+        options->dst_buckets[size - 1] = dst;
+        options->dst_buckets[size] = NULL;
 
         arg = next_coma;
         if (arg)
@@ -204,7 +202,7 @@ extern char* optarg;
  * a GNU extension, we chose to avoid depending on it.
  *
  */
-int retrieve_opts(int argc, char* argv[])
+int retrieve_opts(struct cloudmig_options *options, int argc, char* argv[])
 {
     char                    cur_opt = 0;
     int                     option_index = 0;
@@ -241,14 +239,14 @@ int retrieve_opts(int argc, char* argv[])
             switch (option_index)
             {
             case 0: // delete-source
-                gl_options->flags |= DELETE_SOURCE_DATA;
+                options->flags |= DELETE_SOURCE_DATA;
                 break ;
             case 1: // background mode
                 // In background mode, the tool should be fully silent
-                gl_options->flags |= BACKGROUND_MODE;
+                gl_isbackground = true;
                 break ;
             case 2: // create-directories
-                gl_options->flags |= AUTO_CREATE_DIRS;
+                options->flags |= AUTO_CREATE_DIRS;
                 break ;
             }
             break ;
@@ -257,15 +255,15 @@ int retrieve_opts(int argc, char* argv[])
              * Then we are using non-options arguments.
              * That should be a droplet profile name in the default profile path
              */
-            if (!gl_options->src_profile)
+            if (!options->src_profile)
             {
-                gl_options->flags |= SRC_PROFILE_NAME;
-                gl_options->src_profile = optarg;
+                options->flags |= SRC_PROFILE_NAME;
+                options->src_profile = optarg;
             }
-            else if (!gl_options->dest_profile)
+            else if (!options->dest_profile)
             {
-                gl_options->flags |= DEST_PROFILE_NAME;
-                gl_options->dest_profile = optarg;
+                options->flags |= DEST_PROFILE_NAME;
+                options->dest_profile = optarg;
             }
             else
             {
@@ -274,44 +272,44 @@ int retrieve_opts(int argc, char* argv[])
             }
             break ;
         case 's':
-            if (opt_src_profile())
+            if (opt_src_profile(options))
                 return (EXIT_FAILURE);
             break ;
         case 'd':
-            if (opt_dst_profile())
+            if (opt_dst_profile(options))
                 return (EXIT_FAILURE);
             break ;
         case 'b':
-            if (opt_buckets(optarg))
+            if (opt_buckets(options, optarg))
                 return (EXIT_FAILURE);
             break ;
         case 'c':
-            if (gl_options->config)
+            if (options->config)
                 return (EXIT_FAILURE);
-            gl_options->config = optarg;
+            options->config = optarg;
             break ;
         case 'r':
-            gl_options->flags |= RESUME_MIGRATION;
+            options->flags |= RESUME_MIGRATION;
             break ;
         case 't':
-            if (opt_trace(optarg))
+            if (opt_trace(options, optarg))
                 return (EXIT_FAILURE);
             break;
 /*      case 'i':
-            gl_options->flags |= IGNORE_STATUS;
+            options->flags |= IGNORE_STATUS;
             break ; */
         case 'v':
             opt_verbose(optarg);
             break ;
         case 'o':
-            gl_options->logfile = optarg;
+            options->logfile = optarg;
             break ;
         default:
             // An error has already been printed by getopt...
             return (EXIT_FAILURE);
         }
     }
-    if (gl_options->config == NULL && cloudmig_options_check())
+    if (options->config == NULL && cloudmig_options_check(options))
         return (EXIT_FAILURE);
     return (EXIT_SUCCESS);
 }

@@ -42,6 +42,9 @@
 #include "cloudmig.h"
 
 
+static int  unique_accept_sock = -1;
+static char *unique_sockfile = NULL;
+
 
 static int
 create_log_socket(char * filename)
@@ -85,16 +88,16 @@ void
 unsetup_var_pid_and_sock()
 {
     char    path[64];
-    shutdown(gl_accept_sock, SHUT_RDWR);
-    close(gl_accept_sock);
+    shutdown(unique_accept_sock, SHUT_RDWR);
+    close(unique_accept_sock);
 
     // For unlink, errors are not checked since other migrations may be running.
-    unlink(gl_sockfile);
-    gl_sockfile[strlen(gl_sockfile) - 12] = '\0'; // remove "display.sock"
-    strcpy(path, gl_sockfile);
+    unlink(unique_sockfile);
+    unique_sockfile[strlen(unique_sockfile) - 12] = '\0'; // remove "display.sock"
+    strcpy(path, unique_sockfile);
     strcat(path, "description.txt");
     unlink(path);
-    rmdir(gl_sockfile);
+    rmdir(unique_sockfile);
     rmdir("/tmp/cloudmig/");
 }
 
@@ -146,12 +149,12 @@ setup_var_pid_and_sock(char *src, char *dst)
     snprintf(sockfile, sizeof(sockfile), "%s/display.sock",
              pid_str);
     // First, save the file name into a global string ptr.
-    gl_sockfile = strdup(sockfile);
-    if (gl_sockfile == NULL)
+    unique_sockfile = strdup(sockfile);
+    if (unique_sockfile == NULL)
         return EXIT_FAILURE;
 
-    gl_accept_sock = create_log_socket(sockfile);
-    if (gl_accept_sock == -1)
+    unique_accept_sock = create_log_socket(sockfile);
+    if (unique_accept_sock == -1)
         return (EXIT_FAILURE);
 
     return (EXIT_SUCCESS);
@@ -164,7 +167,7 @@ accept_client(struct cloudmig_ctx *ctx)
     struct sockaddr_un      client_addr;
     socklen_t               client_socklen = sizeof(client_addr);
 
-    int client_sock = accept(gl_accept_sock,
+    int client_sock = accept(unique_accept_sock,
                              (struct sockaddr*)&client_addr,
                              &client_socklen);
     if (client_sock == -1)
@@ -195,10 +198,10 @@ cloudmig_check_for_clients(struct cloudmig_ctx *ctx)
     fd_set          rfds;
 
     FD_ZERO(&rfds);
-    FD_SET(gl_accept_sock, &rfds);
+    FD_SET(unique_accept_sock, &rfds);
 
 retry:
-    if (select(gl_accept_sock + 1, &rfds, NULL, NULL, &timeout) == -1)
+    if (select(unique_accept_sock + 1, &rfds, NULL, NULL, &timeout) == -1)
     {
         if (errno == EINTR)
             goto retry;
@@ -207,7 +210,7 @@ retry:
         return ;
     }
 
-    if (FD_ISSET(gl_accept_sock, &rfds))
+    if (FD_ISSET(unique_accept_sock, &rfds))
         accept_client(ctx);
 }
 
@@ -289,7 +292,7 @@ cloudmig_update_client(struct cloudmig_ctx *ctx)
             goto unset_viewer_fd;
         // We're done with this thread !
         // XXX Unlock the thread's info
-    } while ((threadid + 1) < gl_options->nb_threads);
+    } while ((threadid + 1) < ctx->options.nb_threads);
 
     return ;
 

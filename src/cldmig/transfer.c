@@ -184,7 +184,7 @@ migrate(struct cloudmig_ctx* ctx)
     if (ret == 0) // 0 == number of failures that occured.
     {
         cloudmig_log(INFO_LVL, "Migration finished with success !\n");
-        if (gl_options->flags & DELETE_SOURCE_DATA)
+        if (ctx->options.flags & DELETE_SOURCE_DATA)
             delete_source(ctx);
     }
     else

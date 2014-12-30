@@ -42,15 +42,15 @@ int load_profiles(struct cloudmig_ctx* ctx)
     /*
      * First, load the source profile...
      */
-    cpy = strdup(gl_options->src_profile);
-    if (gl_options->flags & SRC_PROFILE_NAME)
+    cpy = strdup(ctx->options.src_profile);
+    if (ctx->options.flags & SRC_PROFILE_NAME)
         profile_name = cpy;
     else
     {
         profile_name = basename(cpy);
-        char * point = strrchr(profile_name, '.');
-        if (point)
-            *point = '\0';
+        char * dot = strrchr(profile_name, '.');
+        if (dot)
+            *dot = '\0';
         profile_dir = dirname(cpy);
     }
     if ((ctx->src_ctx = dpl_ctx_new(profile_dir, profile_name)) == NULL)
@@ -62,16 +62,16 @@ int load_profiles(struct cloudmig_ctx* ctx)
     free(cpy);
 
 
-    cpy = strdup(gl_options->dest_profile);
+    cpy = strdup(ctx->options.dest_profile);
     profile_dir = 0;
-    if (gl_options->flags & DEST_PROFILE_NAME)
+    if (ctx->options.flags & DEST_PROFILE_NAME)
         profile_name = cpy;
     else
     {
         profile_name = basename(cpy);
-        char * point = strrchr(profile_name, '.');
-        if (point)
-            *point = '\0';
+        char * dot = strrchr(profile_name, '.');
+        if (dot)
+            *dot = '\0';
         profile_dir = dirname(cpy);
     }
     if ((ctx->dest_ctx = dpl_ctx_new(profile_dir, profile_name)) == NULL)
@@ -87,12 +87,12 @@ int load_profiles(struct cloudmig_ctx* ctx)
     /*
      * If the debug option was given, let's activate every droplet traces.
      */
-    if (gl_options->trace_flags != 0)
+    if (ctx->options.trace_flags != 0)
     {
         cloudmig_log(DEBUG_LVL,
                      "[Loading Profiles]: Activating droplet libary traces.\n");
-        ctx->src_ctx->trace_level = gl_options->trace_flags;
-        ctx->dest_ctx->trace_level = gl_options->trace_flags;
+        ctx->src_ctx->trace_level = ctx->options.trace_flags;
+        ctx->dest_ctx->trace_level = ctx->options.trace_flags;
     }
 
     cloudmig_log(INFO_LVL,

@@ -34,20 +34,19 @@
 #include "cloudmig.h"
 #include "options.h"
 
-enum cloudmig_loglevel gl_loglevel = INFO_LVL;
-static FILE* logstream = NULL;
+static FILE* unique_logstream = NULL;
 
 int cloudmig_openlog(char* filename)
 {
-    if (logstream && logstream != stderr)
+    if (unique_logstream && unique_logstream != stderr)
         return EXIT_FAILURE;
 
     // If a filename is set, open it...
     if (filename)
-        logstream = fopen(filename, "a+");
+        unique_logstream = fopen(filename, "a+");
     else
-        logstream = stderr;
-    if (logstream == NULL)
+        unique_logstream = stderr;
+    if (unique_logstream == NULL)
     {
         fprintf(stderr,
                 "cloudmig: [ERR] Could not open file %s for logging : %s\n",
@@ -59,19 +58,19 @@ int cloudmig_openlog(char* filename)
 
 void cloudmig_closelog(void)
 {
-    if (logstream == NULL || logstream == stderr)
+    if (unique_logstream == NULL || unique_logstream == stderr)
     {
-        logstream = NULL;
+        unique_logstream = NULL;
         return ;
     }
-    fclose(logstream);
-    logstream = NULL;
+    fclose(unique_logstream);
+    unique_logstream = NULL;
 }
 
 void cloudmig_log(enum cloudmig_loglevel lvl, const char* format, ...)
 {
     if (lvl >= gl_loglevel
-        && !(gl_options->flags & BACKGROUND_MODE && logstream == stderr))
+        && !(gl_isbackground && unique_logstream == stderr))
     {
         va_list args;
         char*   loglvl_str = 0;
@@ -97,15 +96,15 @@ void cloudmig_log(enum cloudmig_loglevel lvl, const char* format, ...)
             break ;
         }
         va_start(args, format);
-        if (lvl == ERR_LVL && logstream == NULL)
+        if (lvl == ERR_LVL && unique_logstream == NULL)
         {
             fprintf(stderr, "cloudmig: [%s]", loglvl_str);
             vfprintf(stderr, format, args);
         }
-        if (logstream)
+        if (unique_logstream)
         {
-            fprintf(logstream, "cloudmig: [%s]", loglvl_str);
-            vfprintf(logstream, format, args);
+            fprintf(unique_logstream, "cloudmig: [%s]", loglvl_str);
+            vfprintf(unique_logstream, format, args);
         }
         va_end(args);
     }

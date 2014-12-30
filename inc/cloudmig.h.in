@@ -37,6 +37,8 @@
  * libdroplet and its dependencies (pthread)
  */
 #include <pthread.h>
+#include <stdbool.h>
+
 #include <dropletp.h>
 
 /*
@@ -47,6 +49,7 @@
 #include "status.h"
 #include "transfer_info.h"
 #include "display_protocol.h"
+#include "options.h"
 
 // Used for config retrieval.
 struct cldmig_config
@@ -75,19 +78,22 @@ struct cldmig_info
  */
 struct cloudmig_ctx
 {
+    struct cldmig_config    config;
+    struct cloudmig_options options;
+
     dpl_ctx_t               *src_ctx;
     dpl_ctx_t               *dest_ctx;
     int                     viewer_fd;
     struct cloudmig_status  status;
     struct cldmig_info      *tinfos;
 };
-#define CTX_INITIALIZER { NULL, NULL, -1, STATUS_INITIALIZER, NULL }
+#define CTX_INITIALIZER { CONF_INITIALIZER, OPTIONS_INITIALIZER, NULL, NULL, -1, STATUS_INITIALIZER, NULL }
 
 /*
  * Required prototypes
  */
-int     retrieve_opts(int argc, char *argv[]);
-int     load_config(struct cldmig_config *conf);
+int     retrieve_opts(struct cloudmig_options *, int argc, char *argv[]);
+int     load_config(struct cldmig_config *conf, struct cloudmig_options *);
 int     setup_var_pid_and_sock(char *src, char *dst);
 int     load_profiles(struct cloudmig_ctx *ctx);
 int     load_status(struct cloudmig_ctx *ctx, char *src_host, char *dst_host);
@@ -127,7 +133,7 @@ char*   cloudmig_get_status_filename_from_bucket(char *bucket);
 
 
 // Global data declared in the main.c file.
-extern int     gl_accept_sock;
-extern char    *gl_sockfile;
+extern enum cloudmig_loglevel   gl_loglevel;
+extern bool                     gl_isbackground;
 
 #endif /* ! __CLOUDMIG_H__ */

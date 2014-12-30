@@ -38,73 +38,107 @@
 
 #include "cloudmig.h"
 #include "options.h"
-extern int gl_loglevel;
-
-static int      config_fd = -1;
-static FILE     *src_profile = NULL;
-static FILE     *dst_profile = NULL;
 
 static int
-create_tmpfiles(char *file1, char *file2, size_t size1, size_t size2)
+create_tmpfiles(char *srcpath, char *dstpath, size_t srcsize, size_t dstsize,
+                FILE **src_profile, FILE **dst_profile)
 {
-    int     fd1 = -1;
-    int     fd2 = -1;
+    int ret;
+    FILE *src = NULL;
+    FILE *dst = NULL;
 
-    snprintf(file1, size1, "/tmp/cldmig_src.profile");
-    snprintf(file2, size2, "/tmp/cldmig_dst.profile");
+    snprintf(srcpath, srcsize, "/tmp/cldmig_src.profile");
+    snprintf(dstpath, dstsize, "/tmp/cldmig_dst.profile");
+
     // Create the tmp files
-    src_profile = fopen(file1, "w+");
-    if (src_profile == NULL)
+    src = fopen(srcpath, "w+");
+    if (src == NULL)
     {
-        close(fd1);
-        close(fd2);
-        return EXIT_FAILURE;
+        PRINTERR("[Loading Config]: Could not create temporary droplet"
+                 " source profile: %s\n", strerror(errno));
+        ret = EXIT_FAILURE;
+        goto err;
     }
-    dst_profile = fopen(file2, "w+");
-    if (dst_profile == NULL)
+
+    dst = fopen(dstpath, "w+");
+    if (dst == NULL)
     {
-        fclose(src_profile);
-        close(fd2);
-        return EXIT_FAILURE;
+        PRINTERR("[Loading Config]: Could not create temporary droplet"
+                 " destination profile: %s\n", strerror(errno));
+        ret = EXIT_FAILURE;
+        goto err;
     }
-    return EXIT_SUCCESS;
+
+    *src_profile = src;
+    src = NULL;
+
+    *dst_profile = dst;
+    dst = NULL;
+
+    ret = EXIT_SUCCESS;
+
+err:
+    if (src)
+    {
+        fclose(src);
+        unlink(srcpath);
+    }
+    if (dst)
+    {
+        fclose(dst);
+        unlink(dstpath);
+    }
+
+    return ret;
 }
 
 static char*
-map_config_file(char *file, size_t *len)
+map_config_file(char *file, size_t *len, int *fdp)
 {
+    char        *ret = NULL;
     char        *map = NULL;
     struct stat st;
 
-    if ((config_fd = open(file, O_RDONLY)) == -1)
+    if ((*fdp = open(file, O_RDONLY)) == -1)
+    {
+        PRINTERR("[Loading Config]: Could not open config file : %s.\n",
+                 strerror(errno));
         goto err;
-    if (fstat(config_fd, &st) == -1)
+    }
+    if (fstat(*fdp, &st) == -1)
+    {
+        PRINTERR("[Loading Config]: Could not stat config file : %s.\n",
+                 strerror(errno));
         goto err;
+    }
     *len = st.st_size;
-    map = mmap(map, *len,
-               PROT_READ, MAP_FILE|MAP_PRIVATE, config_fd, 0);
+    map = mmap(map, *len, PROT_READ, MAP_FILE|MAP_PRIVATE, *fdp, 0);
     if (map == NULL)
+    {
+        PRINTERR("[Loading Config]: Could not map config file : %s.\n",
+                 strerror(errno));
         goto err;
+    }
 
-    return map;
+    ret = map;
+    fdp = NULL;
 
 err:
-    PRINTERR("[Loading Config]: Could not map config file : %s.\n",
-             strerror(errno));
-    if (config_fd != -1)
-        close(config_fd);
-    return NULL;
+    if (fdp && *fdp != -1)
+        close(*fdp);
+
+    return ret;
 }
 
 static void
-unmap_config_file(void *addr, size_t size)
+unmap_config_file(int *fdp, void *addr, size_t size)
 {
     if (munmap(addr, size) == -1)
         cloudmig_log(WARN_LVL,
                      "[Loaded Config]: Could not munmap config : %s\n",
                      strerror(errno));
-    close(config_fd);
-    config_fd = -1;
+    close(*fdp);
+    *fdp = -1;
 }
 
 /*
@@ -278,7 +312,9 @@ ini_read_keyval(char *buf, size_t len, size_t *line,
  */
 static int
 config_update_options(struct cldmig_config *conf,
-                      char *section, char *key, char *val)
+                      struct cloudmig_options *options,
+                      char *section, char *key, char *val,
+                      FILE *src_profile, FILE *dst_profile)
 {
     if (strcasecmp(section, "source") == 0)
     {
@@ -296,33 +332,33 @@ config_update_options(struct cldmig_config *conf,
     {
         if (strcmp(key, "buckets") == 0)
         {
-            opt_buckets(val);
+            opt_buckets(options, val);
         }
         else if (strcmp(key, "force-resume") == 0)
         {
             if (strcmp(val, "true") == 0)
-                gl_options->flags |= RESUME_MIGRATION;
-            else if (gl_options->flags & RESUME_MIGRATION)
-                gl_options->flags ^= RESUME_MIGRATION;
+                options->flags |= RESUME_MIGRATION;
+            else if (options->flags & RESUME_MIGRATION)
+                options->flags ^= RESUME_MIGRATION;
         }
         else if (strcmp(key, "delete-source") == 0)
         {
             if (strcmp(val, "true") == 0)
-                gl_options->flags |= DELETE_SOURCE_DATA;
-            else if (gl_options->flags & DELETE_SOURCE_DATA)
-                gl_options->flags ^= DELETE_SOURCE_DATA;
+                options->flags |= DELETE_SOURCE_DATA;
+            else if (options->flags & DELETE_SOURCE_DATA)
+                options->flags ^= DELETE_SOURCE_DATA;
         }
         else if (strcmp(key, "background") == 0)
         {
             if (strcmp(val, "true") == 0)
-                gl_options->flags |= BACKGROUND_MODE;
-            else if (gl_options->flags & BACKGROUND_MODE)
-                gl_options->flags ^= BACKGROUND_MODE;
+                gl_isbackground |= true;
+            else if (gl_isbackground)
+                gl_isbackground = false;
         }
         else if (strcmp(key, "verbose") == 0)
             opt_verbose(val);
         else if (strcmp(key, "droplet-trace") == 0)
-            opt_trace(val);
+            opt_trace(options, val);
         else if (strcmp(key, "output") == 0)
         {
             if (val[0] != '\0')
@@ -335,15 +371,15 @@ config_update_options(struct cldmig_config *conf,
                     return EXIT_FAILURE;
                 }
                 else
-                    gl_options->logfile = file;
+                    options->logfile = file;
             }
         }
         else if (strcmp(key, "create-directories") == 0)
         {
             if (strcmp(val, "true") == 0)
-                gl_options->flags |= AUTO_CREATE_DIRS;
-            else if (gl_options->flags & AUTO_CREATE_DIRS)
-                gl_options->flags ^= AUTO_CREATE_DIRS;
+                options->flags |= AUTO_CREATE_DIRS;
+            else if (options->flags & AUTO_CREATE_DIRS)
+                options->flags ^= AUTO_CREATE_DIRS;
         }
     }
     else
@@ -352,7 +388,10 @@ config_update_options(struct cldmig_config *conf,
 }
 
 static int
-parse_config(char *buf, size_t len, struct cldmig_config *conf)
+parse_config(char *buf, size_t len,
+             struct cldmig_config *conf,
+             struct cloudmig_options *options,
+             FILE *src_profile, FILE *dst_profile)
 {
     int     ret = EXIT_SUCCESS;
     size_t  cur_idx = 0;
@@ -374,8 +413,10 @@ parse_config(char *buf, size_t len, struct cldmig_config *conf)
             // key valid only if ini_read_keyval successful.
             if (key)
             {
-                if (config_update_options(conf,
-                                          secname, key, val) == EXIT_FAILURE)
+                if (config_update_options(conf, options,
+                                          secname, key, val,
+                                          src_profile,
+                                          dst_profile) == EXIT_FAILURE)
                     ret = EXIT_FAILURE;
                 free(key);
                 free(val);
@@ -395,60 +436,75 @@ parse_config(char *buf, size_t len, struct cldmig_config *conf)
 }
 
 int
-load_config(struct cldmig_config *conf)
+load_config(struct cldmig_config *conf, struct cloudmig_options *options)
 {
+    int     ret = EXIT_FAILURE;
+    int     config_fd = -1;
     char    *fbuf = NULL;
     size_t  fsize = 0;
+    FILE    *src_profile = NULL;
+    FILE    *dst_profile = NULL;
 
     cloudmig_log(DEBUG_LVL,
                  "[Loading Config]: Starting configuration file parsing.\n");
     if (create_tmpfiles(conf->src_profile, conf->dst_profile,
-                        sizeof(conf->src_profile),
-                        sizeof(conf->dst_profile)) == EXIT_FAILURE)
+                        sizeof(conf->src_profile), sizeof(conf->dst_profile),
+                        &src_profile, &dst_profile) == EXIT_FAILURE)
     {
         PRINTERR("[Loading Config]: Could not create temporary profiles.\n", 0);
+        ret = EXIT_FAILURE;
         goto err;
     }
 
-    fbuf = map_config_file(gl_options->config, &fsize);
+    fbuf = map_config_file(options->config, &fsize, &config_fd);
     if (fbuf == NULL)
+    {
+        ret = EXIT_FAILURE;
         goto err;
+    }
 
-    if (parse_config(fbuf, fsize, conf) == EXIT_FAILURE)
+    if (parse_config(fbuf, fsize, conf, options,
+                     src_profile, dst_profile) == EXIT_FAILURE)
+    {
+        ret = EXIT_FAILURE;
         goto err;
-
-    unmap_config_file(fbuf, fsize);
+    }
 
     // All is well : set the right profiles for the droplet config loading.
-    if (gl_options->flags & SRC_PROFILE_NAME)
-        gl_options->flags ^= SRC_PROFILE_NAME;
-    if (gl_options->flags & DEST_PROFILE_NAME)
-        gl_options->flags ^= DEST_PROFILE_NAME;
-    gl_options->src_profile = conf->src_profile;
-    gl_options->dest_profile = conf->dst_profile;
+    if (options->flags & SRC_PROFILE_NAME)
+        options->flags ^= SRC_PROFILE_NAME;
+    if (options->flags & DEST_PROFILE_NAME)
+        options->flags ^= DEST_PROFILE_NAME;
+    options->src_profile = conf->src_profile;
+    options->dest_profile = conf->dst_profile;
 
     if (conf->src_entry_count == 0)
     {
         PRINTERR("[Loading Config]: No configuration for source profile!\n", 0);
+        ret = EXIT_FAILURE;
         goto err;
     }
     if (conf->dst_entry_count == 0)
     {
         PRINTERR("[Loading Config]: No configuration for"
                  " destination profile!\n", 0);
+        ret = EXIT_FAILURE;
         goto err;
     }
-    if (cloudmig_options_check())
+    if (cloudmig_options_check(options))
+    {
+        ret = EXIT_FAILURE;
         goto err;
+    }
 
-    return EXIT_SUCCESS;
+    ret = EXIT_SUCCESS;
 
 err:
+    if (fbuf)
+        unmap_config_file(&config_fd, fbuf, fsize);
     if (src_profile != NULL)
         fclose(src_profile);
     if (dst_profile != NULL)
         fclose(dst_profile);
-    if (fbuf)
-        unmap_config_file(fbuf, fsize);
-    return EXIT_FAILURE;
+    return ret;
 }

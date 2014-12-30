@@ -35,8 +35,7 @@ enum cloudmig_flags
     RESUME_MIGRATION    = 1 << 3,
     QUIET               = 1 << 5,
     DELETE_SOURCE_DATA  = 1 << 6,
-    BACKGROUND_MODE     = 1 << 7,
-    AUTO_CREATE_DIRS    = 1 << 8,
+    AUTO_CREATE_DIRS    = 1 << 7,
 };
 
 struct cloudmig_options
@@ -70,11 +69,9 @@ struct cloudmig_options
 }
 
 // Used by config parser as well as command line arguments parser.
-int opt_buckets(char *arg);
-int opt_trace(char *arg);
+int opt_buckets(struct cloudmig_options *, char *arg);
+int opt_trace(struct cloudmig_options *, char *arg);
 int opt_verbose(char *arg);
-int cloudmig_options_check(void);
-
-extern struct cloudmig_options* gl_options;
+int cloudmig_options_check(struct cloudmig_options *);
 
 #endif /* ! __SD_CLOUMIG_OPT_H__ */

@@ -133,7 +133,7 @@ transfer_file(struct cloudmig_ctx* ctx,
     filestate->name);
 
 
-    if (gl_options->flags & AUTO_CREATE_DIRS)
+    if (ctx->options.flags & AUTO_CREATE_DIRS)
     {
         if (create_parent_dirs(ctx, filestate) == EXIT_FAILURE)
             goto err;

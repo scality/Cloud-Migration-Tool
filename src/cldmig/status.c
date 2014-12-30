@@ -135,7 +135,7 @@ int load_status(struct cloudmig_ctx* ctx, char *src_host, char *dst_host)
     }
     if (resuming == 0)// Then we must build the new status file through
     {
-        if (gl_options->src_buckets)
+        if (ctx->options.src_buckets)
             ret = create_buckets_status(ctx);
         else
             ret = create_status(ctx, src_buckets);
@@ -153,7 +153,7 @@ int load_status(struct cloudmig_ctx* ctx, char *src_host, char *dst_host)
      * to follow the states evolutions.
      */
     if (resuming == 0
-        || gl_options->flags & RESUME_MIGRATION)
+        || ctx->options.flags & RESUME_MIGRATION)
     {
         if (status_retrieve_states(ctx))
             goto err;
