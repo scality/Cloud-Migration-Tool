@@ -66,11 +66,12 @@ struct cldmig_config
  */
 struct cldmig_info
 {
-    uint32_t    fsize;
-    uint32_t    fdone;
-    uint32_t    fnamlen;
-    char        *fname;
-    void        *infolist;
+    int                     config_flags;
+    uint32_t                fsize;
+    uint32_t                fdone;
+    uint32_t                fnamlen;
+    char                    *fname;
+    struct cldmig_transf    *infolist;      // This list is used to compute the transfer rate
 };
 
 /*

@@ -65,7 +65,8 @@ int main(int argc, char* argv[])
     char	            *dst_hostname = NULL;
     dpl_status_t	    dplret = DPL_FAILURE;
 
-    cloudmig_openlog(NULL); // set stderr as logger for the time being...
+    // set stderr as logger for the time being...
+    cloudmig_openlog(NULL);
 
     // Initializations for the main program.
     starttime = time(NULL);
@@ -86,7 +87,7 @@ int main(int argc, char* argv[])
     {
         int pid = fork();
         if (pid == -1)
-            PRINTERR(": Could not initiate background mode : %s\n",
+            PRINTERR("Could not initiate background mode : %s\n",
                      strerror(errno));
         if (pid != 0) // The father quits.
             return EXIT_SUCCESS;
@@ -102,6 +103,12 @@ int main(int argc, char* argv[])
         return (EXIT_FAILURE);
     }
 
+    // Copy Read-Only config data to each thread info to avoid the need
+    // to manage concurrent accesses.
+    for (int i=0; i < ctx.options.nb_threads; i++)
+        ctx.tinfos[i].config_flags = ctx.options.flags;
+
+    // Allocate/Initialize the two droplet contexts
     if (load_profiles(&ctx) == EXIT_FAILURE)
         goto failure;
 

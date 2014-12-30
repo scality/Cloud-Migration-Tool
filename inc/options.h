@@ -40,8 +40,6 @@ enum cloudmig_flags
 
 struct cloudmig_options
 {
-    int         is_src_name;
-    int         is_dest_name;
     int         flags;
     int         trace_flags;
     int         nb_threads;
@@ -55,8 +53,6 @@ struct cloudmig_options
 
 #define OPTIONS_INITIALIZER \
 {                           \
-    0,                      \
-    0,                      \
     0,                      \
     0,                      \
     1,                      \

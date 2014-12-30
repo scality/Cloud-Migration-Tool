@@ -46,7 +46,7 @@
 *                                                                       *
 \***********************************************************************/
 
-// Unused yet...
+// Unused yet (ie: not written to status file)
 struct cldmig_state_header
 {
     uint64_t    total_sz; // Can count up to ULLONG_MAX bytes.

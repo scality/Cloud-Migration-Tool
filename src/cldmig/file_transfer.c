@@ -84,33 +84,32 @@ struct data_transfer
  * and writes it into the destination file.
  */
 static dpl_status_t
-transfer_data_chunk(void* data, char *buf, unsigned int len)
+transfer_data_chunk(void* cb_data, char *buf, unsigned int len)
 {
-    struct cldmig_transf*   e;
+    struct cldmig_transf    *e;
     struct timeval          tv;
+    struct data_transfer    *data = cb_data;
 
     cloudmig_log(DEBUG_LVL,
     "[Migrating]: vFile %p : Transfering data chunk of %u bytes.\n",
-    ((struct data_transfer*)data)->hfile, len);
+    data->hfile, len);
 
     /*
      * Here, create an element for the byte rate computing list
      * and insert it in the right info list.
      */
     // XXX we should use the thread_idx here instead of hard-coded index
-    ((struct data_transfer*)data)->ctx->tinfos[0].fdone += len;
+    data->ctx->tinfos[0].fdone += len;
     gettimeofday(&tv, NULL);
     e = new_transf_info(&tv, len);
-    insert_in_list((struct cldmig_transf**)(
-                    &((struct data_transfer*)data)->ctx->tinfos[0].infolist),
-                   e);
+    insert_in_list(&data->ctx->tinfos[0].infolist, e);
 
-    cloudmig_check_for_clients(((struct data_transfer*)data)->ctx);
+    cloudmig_check_for_clients(data->ctx);
     /* In any case, let's update a viewer-client if there's one */
-    cloudmig_update_client(((struct data_transfer*)data)->ctx);
+    cloudmig_update_client(data->ctx);
 
 
-    return dpl_write(((struct data_transfer*)data)->hfile, buf, len);
+    return dpl_write(data->hfile, buf, len);
 }
 
 /*
@@ -133,7 +132,7 @@ transfer_file(struct cloudmig_ctx* ctx,
     filestate->name);
 
 
-    if (ctx->options.flags & AUTO_CREATE_DIRS)
+    if (ctx->tinfos[0].config_flags & AUTO_CREATE_DIRS)
     {
         if (create_parent_dirs(ctx, filestate) == EXIT_FAILURE)
             goto err;

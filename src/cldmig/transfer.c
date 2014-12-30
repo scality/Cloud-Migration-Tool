@@ -119,7 +119,7 @@ ret:
     ctx->tinfos[0].fdone = 0;
     ctx->tinfos[0].fnamlen = 0;
     ctx->tinfos[0].fname = NULL;
-    clear_list((struct cldmig_transf**)(&(ctx->tinfos[0].infolist)));
+    clear_list(&(ctx->tinfos[0].infolist));
     // XXX Unlock it
     return (failures == 3);
 }
@@ -184,7 +184,7 @@ migrate(struct cloudmig_ctx* ctx)
     if (ret == 0) // 0 == number of failures that occured.
     {
         cloudmig_log(INFO_LVL, "Migration finished with success !\n");
-        if (ctx->options.flags & DELETE_SOURCE_DATA)
+        if (ctx->tinfos[0].config_flags & DELETE_SOURCE_DATA)
             delete_source(ctx);
     }
     else
