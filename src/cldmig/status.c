@@ -214,21 +214,21 @@ int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
      * Begin at cur_state, and then next_entry_off in the buffer.
      * If the buffer is not allocated, it's time to do it.
      */
-    for (int i = ctx->status.cur_state; i < ctx->status.nb_states; ++i)
+    for (int i = ctx->status.cur_state; i < ctx->status.n_buckets; ++i)
     {
-        struct transfer_state*  bucket_state = &(ctx->status.bucket_states[i]);
-        // TODO Lock bucket_state
-        if (bucket_state->buf == NULL
-            && cloudmig_map_bucket_state(ctx, bucket_state) == EXIT_FAILURE)
+        struct bucket_status*  bst = &(ctx->status.buckets[i]);
+        // TODO Lock bst
+        if (bst->buf == NULL
+            && cloudmig_map_bucket_state(ctx, bst) == EXIT_FAILURE)
             goto err;
         // Increase the count to prevent it being freed after each file.
         // To be freed where no more file to transfer from it too.
-        bucket_state->use_count += 1;
+        bst->refcount += 1;
 
         // loop on the bucket state for each entry, until the end.
-        while (bucket_state->next_entry_off < bucket_state->size)
+        while (bst->next_entry_off < bst->size)
         {
-            fste = (void*)(bucket_state->buf + bucket_state->next_entry_off);
+            fste = (void*)(bst->buf + bst->next_entry_off);
             /*
              * Check if this file has yet to be transfered
              *
@@ -249,15 +249,15 @@ int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
                 filestate->fixed.namlen = ntohl(fste->namlen);
                 // Next, save the data allowing to find back this entry
                 filestate->state_idx = i;
-                filestate->offset = bucket_state->next_entry_off;
+                filestate->offset = bst->next_entry_off;
 
                 // Find the ".cloudmig" in order to isolate the bucket's name
                 // Not checked since the filename should always be a .cloudmig
-                char* buckname_end = strrchr(bucket_state->filename, '.');
+                char* buckname_end = strrchr(bst->filename, '.');
                 // compute the whole filename in the form  srcbucket:filename
                 if (asprintf(&filestate->name, "%.*s:/%s",
-                             (int)(buckname_end - bucket_state->filename),
-                             bucket_state->filename, (char*)(fste+1)) == -1)
+                             (int)(buckname_end - bst->filename),
+                             bst->filename, (char*)(fste+1)) == -1)
                 {
                     filestate->name = NULL;
                     PRINTERR("%s: could not compute src file name : %s",
@@ -267,7 +267,7 @@ int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
 
                 // compute the whole filename in the form  dstbucket:filename
                 if (asprintf(&filestate->dst, "%s:/%s",
-                             bucket_state->dest_bucket, (char*)(fste+1)) == -1)
+                             bst->dest_bucket, (char*)(fste+1)) == -1)
                 {
                     filestate->dst = NULL;
                     PRINTERR("%s: could not compute dest file name : %s",
@@ -282,32 +282,32 @@ int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
                 // For the threading :
                 // Reference counter over the use of the buffer, in order
                 // to avoid freeing it when the bucket is not fully transferred
-                bucket_state->use_count += 1;
+                bst->refcount += 1;
 
                 // Advance for the next search
-                bucket_state->next_entry_off +=
+                bst->next_entry_off +=
                     sizeof(*fste) + ntohl(fste->namlen);
                 break ;
             }
             // If we do not break we need to advance in the file.
-            bucket_state->next_entry_off += sizeof(*fste) + ntohl(fste->namlen);
+            bst->next_entry_off += sizeof(*fste) + ntohl(fste->namlen);
         }
 
         if (found == true)
         {
-            // TODO Unlock bucket_state (locked at loop's start)
+            // TODO Unlock bst (locked at loop's start)
             break ;
         }
 
         // Free only if no transfer reference the buffer.
         // Otherwise it will be done by the update status function
-        bucket_state->use_count -= 1;
-        if (bucket_state->use_count == 0)
+        bst->refcount -= 1;
+        if (bst->refcount == 0)
         {
-            free(bucket_state->buf);
-            bucket_state->buf = NULL;
+            free(bst->buf);
+            bst->buf = NULL;
         }
-        // TODO Unlock bucket_state (locked at loop's start)
+        // TODO Unlock bst (locked at loop's start)
         ctx->status.cur_state = i; // update the current state file index.
     }
 
@@ -354,7 +354,7 @@ int		status_update_entry(struct cloudmig_ctx *ctx,
     dpl_vfile_t     *hfile_genst = NULL;
     char            *ctx_bck = ctx->src_ctx->cur_bucket;
     ctx->src_ctx->cur_bucket = ctx->status.bucket_name;
-    struct transfer_state   *bst = &ctx->status.bucket_states[fst->state_idx];
+    struct bucket_status   *bst = &ctx->status.buckets[fst->state_idx];
 
     cloudmig_log(INFO_LVL,
         "[Updating status]: File %s done up to %li/%li bytes.\n",
@@ -362,7 +362,7 @@ int		status_update_entry(struct cloudmig_ctx *ctx,
     
     if (bst->buf == NULL)
     {
-        PRINTERR("%s: Called for a freed bucket_state !\n", __FUNCTION__);
+        PRINTERR("%s: Called for a freed bucket status !\n", __FUNCTION__);
         goto end;
     }
 
@@ -400,8 +400,8 @@ int		status_update_entry(struct cloudmig_ctx *ctx,
     cloudmig_log(DEBUG_LVL, "[Updating status]: File %s updated.\n", fst->name);
 
     // TODO Lock bst
-    bst->use_count -= 1;
-    if (bst->use_count == 0)
+    bst->refcount -= 1;
+    if (bst->refcount == 0)
     {
         free(bst->buf);
         bst->buf = NULL;

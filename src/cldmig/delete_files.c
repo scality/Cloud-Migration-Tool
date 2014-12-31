@@ -81,11 +81,11 @@ deletebucket:
 
 
 static void delete_source_bucket(struct cloudmig_ctx *ctx,
-                                 struct transfer_state *bucket_state)
+                                 struct bucket_status *bst)
 {
     // Ptr used to change from bucket status filename to bucket name
     // ie: the '.' of "file.cloudmig"
-    char                        *dotptr = strrchr(bucket_state->filename, '.');
+    char                        *dotptr = strrchr(bst->filename, '.');
     struct file_state_entry     *fste = NULL; 
     dpl_status_t                dplret;
 
@@ -95,29 +95,29 @@ static void delete_source_bucket(struct cloudmig_ctx *ctx,
     cloudmig_log(DEBUG_LVL,
                  "[Deleting Source]: Deleting source bucket"
                  " for status file '%s'...\n",
-                 bucket_state->filename);
+                 bst->filename);
 
     // Here the buffer should never be allocated, so map the bucket state.
-    if (cloudmig_map_bucket_state(ctx, bucket_state) == EXIT_FAILURE)
+    if (cloudmig_map_bucket_state(ctx, bst) == EXIT_FAILURE)
         return ;
 
     *dotptr = '\0';
     // loop on the bucket state for each entry, to delete the files.
-    while (bucket_state->next_entry_off < bucket_state->size)
+    while (bst->next_entry_off < bst->size)
     {
-        fste = (void*)(bucket_state->buf + bucket_state->next_entry_off);
-        delete_file(ctx, bucket_state->filename, (char*)(fste+1));
+        fste = (void*)(bst->buf + bst->next_entry_off);
+        delete_file(ctx, bst->filename, (char*)(fste+1));
         // Next entry...
-        bucket_state->next_entry_off += sizeof(*fste) + ntohl(fste->namlen);
+        bst->next_entry_off += sizeof(*fste) + ntohl(fste->namlen);
     }
 
-    free(bucket_state->buf);
+    free(bst->buf);
 
     /*
      * Remove bucket now that all of its files were deleted.
      */
     *dotptr = '\0';
-    dplret = dpl_delete_bucket(ctx->src_ctx, bucket_state->filename);
+    dplret = dpl_delete_bucket(ctx->src_ctx, bst->filename);
     if (dplret != DPL_SUCCESS)
     {
         /*
@@ -129,12 +129,12 @@ static void delete_source_bucket(struct cloudmig_ctx *ctx,
         PRINTERR("%s: Could not remove bucket %s : %s.\n"
                  "The bucket may have been tampered with"
                  " since the migration's start.\n", __FUNCTION__,
-                 bucket_state->filename, dpl_status_str(dplret));
+                 bst->filename, dpl_status_str(dplret));
     }
     else
         cloudmig_log(DEBUG_LVL,
         "[Deleting Source]: Source bucket '%s' deleted successfully.\n",
-        bucket_state->filename);
+        bst->filename);
 
     *dotptr = '.';
 }
@@ -144,8 +144,8 @@ void delete_source(struct cloudmig_ctx *ctx)
 {
     cloudmig_log(INFO_LVL,
     "[Deleting Source]: Starting deletion of the migration's source...\n");
-    for (int i = 0; i < ctx->status.nb_states; ++i)
-        delete_source_bucket(ctx, &(ctx->status.bucket_states[i]));
+    for (int i = 0; i < ctx->status.n_buckets; ++i)
+        delete_source_bucket(ctx, &(ctx->status.buckets[i]));
     delete_status_bucket(ctx);
     cloudmig_log(INFO_LVL,
     "[Deleting Source]: Deletion of the migration's source done.\n");

@@ -112,17 +112,17 @@ static int status_retrieve_associated_buckets(struct cloudmig_ctx* ctx,
             "[Loading Status]: searching match for status file %.*s.\n",
             ntohl(entry->file), (char*)(entry+1));
 
-        // Match the current entry with the right bucket_state.
-        for (int i=0; i < ctx->status.nb_states; ++i)
+        // Match the current entry with the right bucket.
+        for (int i=0; i < ctx->status.n_buckets; ++i)
         {
             // Is it the right one ?
             if (!strcmp((char*)(entry+1),
-                        ctx->status.bucket_states[i].filename))
+                        ctx->status.buckets[i].filename))
             {
                 // copy the destination bucket name
-                ctx->status.bucket_states[i].dest_bucket =
+                ctx->status.buckets[i].dest_bucket =
                     strdup((char*)entry + sizeof(*entry) + ntohl(entry->file));
-                if (ctx->status.bucket_states[i].dest_bucket == NULL)
+                if (ctx->status.buckets[i].dest_bucket == NULL)
                 {
                     PRINTERR("%s: Could not allocate memory while"
                              " loading status...\n", __FUNCTION__);
@@ -131,8 +131,8 @@ static int status_retrieve_associated_buckets(struct cloudmig_ctx* ctx,
 
                 cloudmig_log(DEBUG_LVL,
                 "[Loading Status]: matched status file %s to dest bucket %s.\n",
-                    ctx->status.bucket_states[i].filename,
-                    ctx->status.bucket_states[i].dest_bucket);
+                    ctx->status.buckets[i].filename,
+                    ctx->status.buckets[i].dest_bucket);
 
                 break ;
             }
@@ -159,7 +159,7 @@ int status_retrieve_states(struct cloudmig_ctx* ctx)
 {
     assert(ctx != NULL);
     assert(ctx->status.bucket_name != NULL);
-    assert(ctx->status.bucket_states == NULL);
+    assert(ctx->status.buckets == NULL);
 
     dpl_status_t            dplret = DPL_SUCCESS;
     int                     ret = EXIT_FAILURE;
@@ -180,13 +180,13 @@ int status_retrieve_states(struct cloudmig_ctx* ctx)
         goto err;
     }
 
-    // Allocate enough room for each bucket_state.
-    ctx->status.nb_states = objects->n_items;
+    // Allocate enough room for each bucket.
+    ctx->status.n_buckets = objects->n_items;
     ctx->status.cur_state = 0;
     // -1 cause we dont want to allocate an entry for ".cloudmig"
-    ctx->status.bucket_states = calloc(objects->n_items,
-                                       sizeof(*(ctx->status.bucket_states)));
-    if (ctx->status.bucket_states == NULL)
+    ctx->status.buckets = calloc(objects->n_items,
+                                 sizeof(*(ctx->status.buckets)));
+    if (ctx->status.buckets == NULL)
     {
         PRINTERR("%s: Could not allocate state data for each bucket: %s\n",
                  __FUNCTION__, strerror(errno));
@@ -202,25 +202,25 @@ int status_retrieve_states(struct cloudmig_ctx* ctx)
         {
             // save the file size
             migstatus_size = obj->size;
-            // fix the nb_states of the status ctx
-            --ctx->status.nb_states;
-            // Now get to next entry without advancing in the bucket_states.
+            // fix the n_buckets of the status ctx
+            --ctx->status.n_buckets;
+            // Now get to next entry without advancing in the buckets.
             ++i;
             if (i >= objects->n_items)
                 break ;
         }
-        ctx->status.bucket_states[i_bucket].filename = strdup(obj->path);
-        if (ctx->status.bucket_states[i_bucket].filename == NULL)
+        ctx->status.buckets[i_bucket].filename = strdup(obj->path);
+        if (ctx->status.buckets[i_bucket].filename == NULL)
         {
             PRINTERR("%s: Could not allocate state data for each bucket: %s\n",
                      __FUNCTION__, strerror(errno));
             goto err;
         }
-        ctx->status.bucket_states[i_bucket].size = obj->size;
-        ctx->status.bucket_states[i_bucket].next_entry_off = 0;
+        ctx->status.buckets[i_bucket].size = obj->size;
+        ctx->status.buckets[i_bucket].next_entry_off = 0;
         // The buffer will be read/allocated when needed.
         // Otherwise, it may use up too much memory
-        ctx->status.bucket_states[i_bucket].buf = NULL;
+        ctx->status.buckets[i_bucket].buf = NULL;
     }
 
     if (status_retrieve_associated_buckets(ctx, migstatus_size) == EXIT_FAILURE)
@@ -235,15 +235,15 @@ int status_retrieve_states(struct cloudmig_ctx* ctx)
     cloudmig_log(INFO_LVL, "[Loading Status]: Status data retrieved.\n");
 
 err:
-    if (ret == EXIT_FAILURE && ctx->status.bucket_states != NULL)
+    if (ret == EXIT_FAILURE && ctx->status.buckets != NULL)
     {
-        for (int i=0; i < ctx->status.nb_states; ++i)
+        for (int i=0; i < ctx->status.n_buckets; ++i)
         {
-            if (ctx->status.bucket_states[i].filename)
-                free(ctx->status.bucket_states[i].filename);
+            if (ctx->status.buckets[i].filename)
+                free(ctx->status.buckets[i].filename);
         }
-        free(ctx->status.bucket_states);
-        ctx->status.bucket_states = NULL;
+        free(ctx->status.buckets);
+        ctx->status.buckets = NULL;
     }
 
     if (objects != NULL)

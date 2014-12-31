@@ -122,11 +122,11 @@ struct file_transfer_state
 /*
  * Describes a bucket status file.
  */
-struct transfer_state
+struct bucket_status
 {
     char                        *filename;      // name of the status file
     char                        *dest_bucket;   // name of the destination bckt
-    unsigned int                use_count;
+    unsigned int                refcount;
     size_t                      size;           // size of the status file
     char                        *buf;           // file's content.
     unsigned int                next_entry_off; // index on the next entry
@@ -139,9 +139,9 @@ struct cloudmig_status
 {
     struct cldmig_status    general;            // general cloudmig status
     char                    *bucket_name;       // name of the status bucket
-    int                     nb_states;          // number of bucket states
+    int                     n_buckets;          // number of bucket states
     int                     cur_state;          // index of the current state
-    struct transfer_state   *bucket_states;     // ptr on the table of states
+    struct bucket_status    *buckets;           // ptr on the table of states
 };
 #define STATUS_INITIALIZER { GENERAL_STATUS_INITIALIZER, NULL, 0, 0, NULL }
 
