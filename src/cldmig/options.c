@@ -212,6 +212,7 @@ int retrieve_opts(struct cloudmig_options *options, int argc, char* argv[])
         {"delete-source",       no_argument,        0,  0 },
         {"background",          no_argument,        0,  0 },
         {"create-directories",  no_argument,        0,  0 },
+        {"block-size",          required_argument,  0, 'B'},
         /* Configuration-related options    */
         {"src-profile",         required_argument,  0, 's'},
         {"dst-profile",         required_argument,  0, 'd'},
@@ -268,20 +269,28 @@ int retrieve_opts(struct cloudmig_options *options, int argc, char* argv[])
             else
             {
                 PRINTERR("Unexpected argument : %s\n", optarg);
-                return (EXIT_FAILURE);
+                return EXIT_FAILURE;
             }
             break ;
         case 's':
             if (opt_src_profile(options))
-                return (EXIT_FAILURE);
+                return EXIT_FAILURE;
             break ;
         case 'd':
             if (opt_dst_profile(options))
-                return (EXIT_FAILURE);
+                return EXIT_FAILURE;
             break ;
         case 'b':
             if (opt_buckets(options, optarg))
-                return (EXIT_FAILURE);
+                return EXIT_FAILURE;
+            break ;
+        case 'B':
+            options->block_size = strtoul(optarg, NULL, 10);
+            if (options->block_size == ULONG_MAX && errno == ERANGE)
+            {
+                PRINTERR("Invalid value for block size argument");
+                return EXIT_FAILURE;
+            }
             break ;
         case 'c':
             if (options->config)

@@ -40,15 +40,16 @@ enum cloudmig_flags
 
 struct cloudmig_options
 {
-    int         flags;
-    int         trace_flags;
-    int         nb_threads;
-    const char  *src_profile;
-    const char  *dest_profile;
-    char        *logfile;
-    char        **src_buckets;
-    char        **dst_buckets;
-    char        *config;
+    int                 flags;
+    int                 trace_flags;
+    int                 nb_threads;
+    const char          *src_profile;
+    const char          *dest_profile;
+    char                *logfile;
+    char                **src_buckets;
+    char                **dst_buckets;
+    char                *config;
+    long unsigned int   block_size;
 };
 
 #define OPTIONS_INITIALIZER \
@@ -61,7 +62,8 @@ struct cloudmig_options
     NULL,                   \
     NULL,                   \
     NULL,                   \
-    NULL                    \
+    NULL,                   \
+    0                       \
 }
 
 // Used by config parser as well as command line arguments parser.
