@@ -8,9 +8,9 @@
 .\"  * Redistributions in binary form must reproduce the above copyright
 .\"    notice, this list of conditions and the following disclaimer in the
 .\"    documentation and/or other materials provided with the distribution.
-.\"  * Neither the name of the copyright holder nor the names of its contributors
-.\"    may be used to endorse or promote products derived from this software
-.\"    without specific prior written permission.
+.\"  * Neither the name of the copyright holder nor the names of its
+.\"    contributors may be used to endorse or promote products derived from
+.\"    this software without specific prior written permission.
 .\"
 .\" THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 .\" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -25,7 +25,8 @@
 .\" POSSIBILITY OF SUCH DAMAGE.
 .\"
 
-.TH CLOUDMIG 1 "March 15, 2011" "BSD 3-clause Licence" "BSD General Commands Manual"
+.TH CLOUDMIG 1 "March 15, 2011" "BSD 3-clause Licence"
+.TH "BSD General Commands Manual"
 
 .SH NAME
 
@@ -40,31 +41,61 @@ cloudmig
 .P
 .B
 cloudmig
-[ \fIsrc_profile_name\fP | \fB\-\-src\-profile\fP=\fIsrc_profile\fP ]
+[
+    \fIsrc_profile_name\fP
+    |
+    \fB\-\-src\-profile\fP=\fIsrc_profile\fP
+    |
+    \fB\-s\fP \fIsrc_profile\fP
+]
 .br
-[ \fIdst_profile_name\fP | \fB\-\-dst\-profile\fP=\fIdst_profile\fP ]
+[
+    \fIdst_profile_name\fP
+    |
+    \fB\-\-dst\-profile\fP=\fIdst_profile\fP
+    |
+    \fB\-d\fP \fIdst_profile\fP
+]
 .br
-[ \fB\-\-config\fP=\fIconfig_file\fP ]
+[
+    \fB\-\-status\-profile\fP=\fIstatus_profile\fP
+    |
+    \fB\-S\fP \fIstatus_profile\fP
+]
 .br
-[ \fB\-\-buckets\fP=\fIbuckets_associations\fP]
+[ \fB\-\-config\fP=\fIconfig_file\fP | \fB\-c\fP \fIconfig_file\fP ]
 .br
-[ \fB\-\-force\-resume\fP ]
+[
+    \fB\-\-buckets\fP=\fIbuckets_associations\fP
+    |
+    \fB\-b\fP \fIbuckets_associations\fP
+]
+.br
+[ \fB\-\-block-size\fP=\fIblock_size\fP | \fB\-B\fP \fIblock_size\fP]
+.br
+[ \fB\-\-force\-resume\fP | \fB\-r\fP ]
 .br
 [ \fB\-\-delete\-source\fP ]
 .br
 [ \fB\-\-background\fP ]
 .br
-[ \fB\-\-output\fP=\fIlog_file\fP ]
+[ \fB\-\-output\fP=\fIlog_file\fP | \fB\-o\fP \fIlogfile\fP ]
 .br
 [ \fB\-\-verbose\fP=[
-\fBdebug\fP
-| \fBinfo\fP
-| \fBwarn\fP
-| \fBstatus\fP
-| \fBerror\fP ]
+    \fBdebug\fP
+    | \fBinfo\fP
+    | \fBwarn\fP
+    | \fBstatus\fP
+    | \fBerror\fP ]
+ | \fB\-v\fP [
+    \fBdebug\fP
+    | \fBinfo\fP
+    | \fBwarn\fP
+    | \fBstatus\fP
+    | \fBerror\fP ]
 ]
 .br
-[ \fB\-\-droplet\-trace\fP=\fInihsrcdfb\fP ]
+[ \fB\-\-droplet\-trace\fP=\fInihsrcdfb\fP | \fB\-t\fP \fInihsrcdfb\fP]
 
 
 
@@ -237,17 +268,21 @@ verbose=status line is read from the configuration file.
 
 .SS Format
 .P
-The format of cloudmig's configuration file is a standard ini format. It must
-contain three sections:
+The format of cloudmig's configuration file is a standard json. The root object
+can contain up to four sections:
 .br
     \fIsource\fP: contains information about the source account
 .br
     \fIdestination\fP: contains information about the destination account
 .br
+    \fIstatus\fP: contains information about the status account (used to store
+status information about the migration)
+.br
     \fIcloudmig\fP: contains information about the tool's behavior
 
 .P
-Both source and destination sections contains the same values:
+Both source and destination sections contains the same values
+(as key-value pairs):
 .br
     \fIuse_https\fP(boolean): secure connection (default false)
 .br
