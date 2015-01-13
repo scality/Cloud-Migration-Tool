@@ -30,6 +30,6 @@
 /*
  * This macro allows logging an ERROR while hiding the use of cloudmig_log
  */
-#define PRINTERR(format, ...)  cloudmig_log(ERR_LVL, format, __VA_ARGS__)
+#define PRINTERR(format, ...)  cloudmig_log(ERR_LVL, format, ## __VA_ARGS__)
 
 #endif /* ! __CLOUDMIG_ERROR_H__ */
