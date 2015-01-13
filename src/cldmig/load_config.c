@@ -35,20 +35,25 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <json.h>
 
 #include "cloudmig.h"
 #include "options.h"
 
 static int
-create_tmpfiles(char *srcpath, char *dstpath, size_t srcsize, size_t dstsize,
-                FILE **src_profile, FILE **dst_profile)
+create_tmp_profiles(char *srcpath, size_t srcsize,
+                    char *dstpath, size_t dstsize,
+                    char *stpath, size_t stsize,
+                    FILE **src_profile, FILE **dst_profile, FILE **st_profile)
 {
     int ret;
     FILE *src = NULL;
     FILE *dst = NULL;
+    FILE *status = NULL;
 
     snprintf(srcpath, srcsize, "/tmp/cldmig_src.profile");
     snprintf(dstpath, dstsize, "/tmp/cldmig_dst.profile");
+    snprintf(stpath,  stsize,  "/tmp/cldmig_status.profile");
 
     // Create the tmp files
     src = fopen(srcpath, "w+");
@@ -69,11 +74,23 @@ create_tmpfiles(char *srcpath, char *dstpath, size_t srcsize, size_t dstsize,
         goto err;
     }
 
+    status = fopen(stpath, "w+");
+    if (status == NULL)
+    {
+        PRINTERR("[Loading Config]: Could not create temporary droplet"
+                 " status profile: %s\n", strerror(errno));
+        ret = EXIT_FAILURE;
+        goto err;
+    }
+
     *src_profile = src;
     src = NULL;
 
     *dst_profile = dst;
     dst = NULL;
+
+    *st_profile = status;
+    status = NULL;
 
     ret = EXIT_SUCCESS;
 
@@ -87,6 +104,11 @@ err:
     {
         fclose(dst);
         unlink(dstpath);
+    }
+    if (status)
+    {
+        fclose(status);
+        unlink(stpath);
     }
 
     return ret;
@@ -141,169 +163,68 @@ unmap_config_file(int *fdp, void *addr, size_t size)
     *fdp = -1;
 }
 
-/*
- * Consumes spaces and comments, but not the line feeds
- */
-static void
-consume_spaces(char *buf, size_t len, size_t *line, size_t *idx)
+static int
+config_update_json_buckets(struct cloudmig_options *options,
+                           struct json_object *buckets)
 {
-    (void)line;
-    while (*idx < len && isspace(buf[*idx]))
+    int ret = EXIT_SUCCESS;
+    int i = 0;
+    int n_buckets = 0;
+    char **src_buckets = NULL;
+    char **dst_buckets = NULL;
+
+    n_buckets = json_object_object_length(buckets);
+
+    src_buckets = calloc(n_buckets+1, sizeof(*options->src_buckets));
+    dst_buckets = calloc(n_buckets+1, sizeof(*options->dst_buckets));
+    if (src_buckets == NULL || dst_buckets == NULL)
     {
-        if (buf[*idx] == '\n')
-            break;
-        ++(*idx);
+        PRINTERR("Could not allocate buckets for configuration.");
+        ret = EXIT_FAILURE;
+        goto err;
     }
-    if (*idx < len && buf[*idx] == '#')
+
+    json_object_object_foreach(buckets, key, val)
     {
-        while (*idx < len && buf[*idx] != '\n')
-            ++(*idx);
-    }
-}
-
-static bool
-ini_span_empty_line(char *buf, size_t len, size_t *line, size_t *idx)
-{
-    size_t cur_idx = *idx;
-
-
-    while (cur_idx < len && isspace(buf[cur_idx]))
-    {
-        if (buf[cur_idx] == '\n')
-            break ;
-        ++cur_idx;
-    }
-    // Return false if not EOF or not EOL
-    if (cur_idx < len && buf[cur_idx] != '\n')
-        return false;
-    if (cur_idx == len)
-        return false;
-    if (cur_idx < len)
-    {
-        ++cur_idx;
-        ++(*line);
-    }
-    *idx = cur_idx;
-    return true;
-}
-
-/*
- * Reads a string, quoted or not, but stops at comments.
- */
-static char*
-read_string(char *buf, size_t len, size_t *line, size_t *idx)
-{
-    char        *string = NULL;
-    bool        quoted = false;
-    size_t      start_idx = *idx;
-    size_t      end_idx = *idx;
-    size_t      cur_idx = *idx;
-
-    consume_spaces(buf, len, line, &cur_idx);
-    start_idx = cur_idx;
-    if (cur_idx < len && buf[cur_idx] == '"')
-    {
-        quoted = true;
-        ++start_idx;
-        ++cur_idx;
-    }
-    // Either it's quoted and we span until '"'
-    // either it's not and :
-    //  - No spaces
-    //  - alphanums, '_', '-' and '.' are ok
-    while ((quoted && !(buf[cur_idx] == '"' && buf[cur_idx - 1] != '\\'))
-           || (!quoted && !isspace(buf[cur_idx])
-               && (isalnum(buf[cur_idx]) || buf[cur_idx] == '.'
-                   || buf[cur_idx] == '_' || buf[cur_idx] == '-')))
-    {
-        if (!quoted && buf[cur_idx] == '#')
-            break ;
-        ++cur_idx;
-    }
-    end_idx = cur_idx;
-    if (quoted)
-        ++cur_idx;
-
-    // Then allocate string. (C99 _GNU_SOURCE for strndup)
-    string = strndup(&buf[start_idx], end_idx - start_idx);
-
-    *idx = cur_idx;
-    return string;
-}
-
-static bool
-ini_read_section(char *buf, size_t len, size_t *line,
-                 size_t *idx, char **secname)
-{
-    size_t  cur_idx = *idx;
-
-    consume_spaces(buf, len, line, &cur_idx);
-    if (!(cur_idx < len && buf[cur_idx] == '['))
-        return false;
-    ++cur_idx;
-    *secname = read_string(buf, len, line, &cur_idx);
-    consume_spaces(buf, len, line, &cur_idx);
-    if (!(cur_idx < len && buf[cur_idx] == ']'))
-    {
-        PRINTERR("[Loading Config]: no matching ']' line %i.\n", *line);
-        free(*secname);
-        *secname = NULL;
-        return false;
-    }
-    ++cur_idx;
-    if (ini_span_empty_line(buf, len, line, &cur_idx) == false)
-    {
-        free(*secname);
-        *secname = NULL;
-        PRINTERR("[Loading Config]: Junk at end of line %i.\n", *line);
-        return false;
-    }
-    *idx = cur_idx;
-    cloudmig_log(DEBUG_LVL,
-                 "[Loading Config]: read section : %s...\n", *secname);
-    return true;
-}
-
-static bool
-ini_read_keyval(char *buf, size_t len, size_t *line,
-                size_t *idx, char **key, char **val)
-{
-    size_t  cur_idx = *idx;
-
-    consume_spaces(buf, len, line, &cur_idx);
-    *key = read_string(buf, len, line, &cur_idx);
-    consume_spaces(buf, len, line, &cur_idx);
-    if (!(cur_idx < len && buf[cur_idx] == '='))
-    {
-        if (*key)
+        if (json_object_is_type(val, json_type_string) == FALSE)
         {
-            free(*key);
-            *key = NULL;
+            PRINTERR("Bucket \"%s\" 's target is not a json string", key);
+            ret = EXIT_FAILURE;
+            goto err;
         }
-        return false;
+        src_buckets[i] = strdup(key);
+        dst_buckets[i] = strdup(json_object_get_string(val));
+        if (src_buckets[i] == NULL || dst_buckets[i] == NULL)
+        {
+            PRINTERR("Could not allocate buckets for configuration.");
+            ret = EXIT_FAILURE;
+            goto err;
+        }
+        ++i;
     }
-    ++cur_idx;
-    if (*key == NULL || *key[0] == '\0')
+
+    options->src_buckets = src_buckets;
+    options->dst_buckets = dst_buckets;
+    src_buckets = NULL;
+    dst_buckets = NULL;
+
+    ret = EXIT_SUCCESS;
+
+err:
+    if (src_buckets)
     {
-        PRINTERR("[Loading Config]: No key before character '=' in line %i.\n",
-                 *line);
-        if (*key)
-            free(*key);
-        *key = NULL;
-        return false;
+        for (int i=0; i < n_buckets; i++)
+            free(src_buckets[i]);
+        free(src_buckets);
     }
-    consume_spaces(buf, len, line, &cur_idx);
-    *val = read_string(buf, len, line, &cur_idx);
-    if (ini_span_empty_line(buf, len, line, &cur_idx) == false)
+    if (dst_buckets)
     {
-        PRINTERR("[Loading Config]: Junk at end of line %i.\n", *line);
-        return false;
+        for (int i=0; i < n_buckets; i++)
+            free(dst_buckets[i]);
+        free(dst_buckets);
     }
-    cloudmig_log(DEBUG_LVL,
-                 "[Loading Config]: read key/val : \"%s=%s\"...\n",
-                 *key, *val);
-    *idx = cur_idx;
-    return true;
+
+    return ret;
 }
 
 /*
@@ -313,145 +234,222 @@ ini_read_keyval(char *buf, size_t len, size_t *line,
 static int
 config_update_options(struct cldmig_config *conf,
                       struct cloudmig_options *options,
-                      char *section, char *key, char *val,
-                      FILE *src_profile, FILE *dst_profile)
+                      const char *section, const char *key, struct json_object *val,
+                      FILE *src_profile, FILE *dst_profile,
+                      FILE *status_profile)
 {
+    int         add_to_profile = 0;
+    int         *countp = NULL;
+    FILE        *profile = NULL;
+
     if (strcasecmp(section, "source") == 0)
     {
-        fprintf(src_profile, "%s=%s\n", key, val);
-        fflush(src_profile);
-        conf->src_entry_count += 1;
+        profile = src_profile;
+        countp = &conf->src_entry_count;
+        add_to_profile = 1;
     }
     else if (strcasecmp(section, "destination") == 0)
     {
-        fprintf(dst_profile, "%s=%s\n", key, val);
-        fflush(dst_profile);
-        conf->dst_entry_count += 1;
+        profile = dst_profile;
+        countp = &conf->dst_entry_count;
+        add_to_profile = 1;
+    }
+    else if (strcasecmp(section, "status") == 0)
+    {
+        profile = status_profile;
+        countp = &conf->status_entry_count;
+        add_to_profile = 1;
     }
     else if (strcasecmp(section, "cloudmig") == 0)
     {
-        if (strcmp(key, "buckets") == 0)
+        if (strcasecmp(key, "buckets") == 0)
         {
-            opt_buckets(options, val);
-        }
-        else if (strcmp(key, "force-resume") == 0)
-        {
-            if (strcmp(val, "true") == 0)
-                options->flags |= RESUME_MIGRATION;
-            else if (options->flags & RESUME_MIGRATION)
-                options->flags ^= RESUME_MIGRATION;
-        }
-        else if (strcmp(key, "delete-source") == 0)
-        {
-            if (strcmp(val, "true") == 0)
-                options->flags |= DELETE_SOURCE_DATA;
-            else if (options->flags & DELETE_SOURCE_DATA)
-                options->flags ^= DELETE_SOURCE_DATA;
-        }
-        else if (strcmp(key, "background") == 0)
-        {
-            if (strcmp(val, "true") == 0)
-                gl_isbackground |= true;
-            else if (gl_isbackground)
-                gl_isbackground = false;
-        }
-        else if (strcmp(key, "verbose") == 0)
-            opt_verbose(val);
-        else if (strcmp(key, "droplet-trace") == 0)
-            opt_trace(options, val);
-        else if (strcmp(key, "output") == 0)
-        {
-            if (val[0] != '\0')
+            if (!json_object_is_type(val, json_type_object))
             {
-                char *file = strdup(val);
+                PRINTERR("Unexpected type %i for option 'cloudmig/buckets'",
+                         json_object_get_type(val));
+                return EXIT_FAILURE;
+            }
+            if (options->src_buckets || options->dst_buckets)
+            {
+                PRINTERR("Source and target buckets cannot be configured multiple times.");
+                return EXIT_FAILURE;
+            }
+            if (config_update_json_buckets(options, val) != EXIT_SUCCESS)
+                return EXIT_FAILURE;
+        }
+        else if (strcasecmp(key, "force-resume") == 0)
+        {
+            if (!json_object_is_type(val, json_type_boolean))
+            {
+                PRINTERR("Unexpected type %i for option 'cloudmig/force-resume'",
+                         json_object_get_type(val));
+                return EXIT_FAILURE;
+            }
+            options->flags &= ~RESUME_MIGRATION;
+            if (json_object_get_boolean(val) == TRUE)
+                options->flags |= RESUME_MIGRATION;
+        }
+        else if (strcasecmp(key, "delete-source") == 0)
+        {
+            if (!json_object_is_type(val, json_type_boolean))
+            {
+                PRINTERR("Unexpected type %i for option 'cloudmig/delete-source'",
+                         json_object_get_type(val));
+                return EXIT_FAILURE;
+            }
+            options->flags &= ~DELETE_SOURCE_DATA;
+            if (json_object_get_boolean(val) == TRUE)
+                options->flags |= DELETE_SOURCE_DATA;
+        }
+        else if (strcasecmp(key, "background") == 0)
+        {
+            if (!json_object_is_type(val, json_type_boolean))
+            {
+                PRINTERR("Unexpected type %i for option 'cloudmig/background'",
+                         json_object_get_type(val));
+                return EXIT_FAILURE;
+            }
+            gl_isbackground = false;
+            if (json_object_get_boolean(val) == TRUE)
+                gl_isbackground |= true;
+        }
+        else if (strcasecmp(key, "verbose") == 0)
+        {
+            if (!json_object_is_type(val, json_type_string))
+            {
+                PRINTERR("Unexpected type %i for option 'cloudmig/verbose'",
+                         json_object_get_type(val));
+                return EXIT_FAILURE;
+            }
+            if (opt_verbose(json_object_get_string(val)) != EXIT_SUCCESS)
+                return EXIT_FAILURE;
+        }
+        else if (strcasecmp(key, "droplet-trace") == 0)
+        {
+            if (!json_object_is_type(val, json_type_string))
+            {
+                PRINTERR("Unexpected type %i for option 'cloudmig/droplet-trace'",
+                         json_object_get_type(val));
+                return EXIT_FAILURE;
+            }
+            if (opt_trace(options, json_object_get_string(val)) != EXIT_SUCCESS)
+                return EXIT_FAILURE;
+        }
+        else if (strcasecmp(key, "output") == 0)
+        {
+            if (!json_object_is_type(val, json_type_string))
+            {
+                PRINTERR("Unexpected type %i for option 'cloudmig/output'",
+                         json_object_get_type(val));
+                return EXIT_FAILURE;
+            }
+            const char *v = json_object_get_string(val);
+            if (v[0] != '\0')
+            {
+                char *file = strdup(v);
                 if (file == NULL)
                 {
                     PRINTERR("[Loading Config]: Could not set logfile %s\n",
                              strerror(errno));
                     return EXIT_FAILURE;
                 }
-                else
-                    options->logfile = file;
+                options->logfile = file;
             }
         }
-        else if (strcmp(key, "create-directories") == 0)
+        else if (strcasecmp(key, "create-directories") == 0)
         {
-            if (strcmp(val, "true") == 0)
+            if (!json_object_is_type(val, json_type_boolean))
+            {
+                PRINTERR("Unexpected type %i for option 'cloudmig/create-directories'",
+                         json_object_get_type(val));
+                return EXIT_FAILURE;
+            }
+            options->flags &= ~AUTO_CREATE_DIRS;
+            if (json_object_get_boolean(val) == TRUE)
                 options->flags |= AUTO_CREATE_DIRS;
-            else if (options->flags & AUTO_CREATE_DIRS)
-                options->flags ^= AUTO_CREATE_DIRS;
         }
     }
     else
         PRINTERR("[Loading Config]: Invalid section name '%s'.\n", section);
+
+    if (add_to_profile)
+    {
+        switch (json_object_get_type(val))
+        {
+        case json_type_boolean:
+            fprintf(profile, "%s=%i\n", key, !!json_object_get_boolean(val));
+            break ;
+        case json_type_double:
+            fprintf(profile, "%s=%f\n", key, json_object_get_double(val));
+            break ;
+        case json_type_int:
+            fprintf(profile, "%s=%i\n", key, json_object_get_int(val));
+            break ;
+        case json_type_string:
+            fprintf(profile, "%s=%s\n", key, json_object_get_string(val));
+            break ;
+        case json_type_object:
+        case json_type_array:
+        default:
+            PRINTERR("[Loading Config]: Unexpected json element type"
+                     " for section's %s value: %i.", section,
+                     json_object_get_type(val));
+            return EXIT_FAILURE;
+        }
+        fflush(profile);
+        *countp += 1;
+    }
+
     return EXIT_SUCCESS;
 }
 
 static int
-parse_config(char *buf, size_t len,
-             struct cldmig_config *conf,
+parse_config(struct cldmig_config *conf,
              struct cloudmig_options *options,
-             FILE *src_profile, FILE *dst_profile)
+             struct json_object *json_config,
+             FILE *src_profile, FILE *dst_profile,
+             FILE *status_profile)
 {
     int     ret = EXIT_SUCCESS;
-    size_t  cur_idx = 0;
-    size_t  line = 1;
-    char    *secname = NULL;
 
-    while (ini_read_section(buf, len, &line, &cur_idx, &secname)
-           || ini_span_empty_line(buf, len, &line, &cur_idx))
+    json_object_object_foreach(json_config, section_name, section)
     {
-        // If null, then it was an empty line.
-        if (secname == NULL)
-            continue ;
-
-        char    *key = NULL;
-        char    *val = NULL;
-        while (ini_read_keyval(buf, len, &line, &cur_idx, &key, &val)
-               || ini_span_empty_line(buf, len, &line, &cur_idx))
+        json_object_object_foreach(section, key, val)
         {
-            // key valid only if ini_read_keyval successful.
-            if (key)
-            {
-                if (config_update_options(conf, options,
-                                          secname, key, val,
-                                          src_profile,
-                                          dst_profile) == EXIT_FAILURE)
-                    ret = EXIT_FAILURE;
-                free(key);
-                free(val);
-                key = val = NULL;
-            }
+            if (config_update_options(conf, options,
+                                      section_name, key, val,
+                                      src_profile,
+                                      dst_profile,
+                                      status_profile) == EXIT_FAILURE)
+                ret = EXIT_FAILURE;
         }
-        free(secname);
-        secname = NULL;
     }
-    if (cur_idx < len)
-    {
-        PRINTERR("[Loading Config]: Junk at end of file (line %i):"
-                 " The values must be contained in a section.\n", line);
-        return EXIT_FAILURE;
-    }
+
     return ret;
 }
 
 int
 load_config(struct cldmig_config *conf, struct cloudmig_options *options)
 {
-    int     ret = EXIT_FAILURE;
-    int     config_fd = -1;
-    char    *fbuf = NULL;
-    size_t  fsize = 0;
-    FILE    *src_profile = NULL;
-    FILE    *dst_profile = NULL;
+    int                 ret = EXIT_FAILURE;
+    int                 config_fd = -1;
+    char                *fbuf = NULL;
+    size_t              fsize = 0;
+    struct json_tokener *json_parser = NULL;
+    struct json_object  *json_config = NULL;
+    FILE                *src_profile = NULL;
+    FILE                *dst_profile = NULL;
+    FILE                *status_profile = NULL;
 
-    cloudmig_log(DEBUG_LVL,
-                 "[Loading Config]: Starting configuration file parsing.\n");
-    if (create_tmpfiles(conf->src_profile, conf->dst_profile,
-                        sizeof(conf->src_profile), sizeof(conf->dst_profile),
-                        &src_profile, &dst_profile) == EXIT_FAILURE)
+    cloudmig_log(DEBUG_LVL, "[Loading Config]: Starting configuration file parsing.\n");
+
+    if (create_tmp_profiles(conf->src_profile, sizeof(conf->src_profile),
+                            conf->dst_profile, sizeof(conf->dst_profile),
+                            conf->status_profile, sizeof(conf->status_profile),
+                            &src_profile, &dst_profile, &status_profile) == EXIT_FAILURE)
     {
-        PRINTERR("[Loading Config]: Could not create temporary profiles.\n", 0);
+        PRINTERR("[Loading Config]: Could not create temporary profiles.\n");
         ret = EXIT_FAILURE;
         goto err;
     }
@@ -463,8 +461,23 @@ load_config(struct cldmig_config *conf, struct cloudmig_options *options)
         goto err;
     }
 
-    if (parse_config(fbuf, fsize, conf, options,
-                     src_profile, dst_profile) == EXIT_FAILURE)
+    json_parser = json_tokener_new();
+    if (json_parser == NULL)
+    {
+        PRINTERR("[Loading Config]: Could not allocate json parser.\n");
+        ret = EXIT_FAILURE;
+        goto err;
+    }
+    json_config = json_tokener_parse_ex(json_parser, fbuf, fsize);
+    if (json_config == NULL)
+    {
+        PRINTERR("[Loading Config]: Could not parse json.\n");
+        ret = EXIT_FAILURE;
+        goto err;
+    }
+
+    if (parse_config(conf, options, json_config,
+                     src_profile, dst_profile, status_profile) == EXIT_FAILURE)
     {
         ret = EXIT_FAILURE;
         goto err;
@@ -475,8 +488,11 @@ load_config(struct cldmig_config *conf, struct cloudmig_options *options)
         options->flags ^= SRC_PROFILE_NAME;
     if (options->flags & DEST_PROFILE_NAME)
         options->flags ^= DEST_PROFILE_NAME;
+    if (options->flags & STATUS_PROFILE_NAME)
+        options->flags ^= STATUS_PROFILE_NAME;
     options->src_profile = conf->src_profile;
     options->dest_profile = conf->dst_profile;
+    options->status_profile = conf->status_profile;
 
     if (conf->src_entry_count == 0)
     {
@@ -491,6 +507,14 @@ load_config(struct cldmig_config *conf, struct cloudmig_options *options)
         ret = EXIT_FAILURE;
         goto err;
     }
+    if (conf->status_entry_count == 0)
+    {
+        PRINTERR("[Loading Config]: No configuration for"
+                 " status profile!\n", 0);
+        ret = EXIT_FAILURE;
+        goto err;
+    }
+
     if (cloudmig_options_check(options))
     {
         ret = EXIT_FAILURE;
@@ -506,5 +530,11 @@ err:
         fclose(src_profile);
     if (dst_profile != NULL)
         fclose(dst_profile);
+
+    if (json_parser)
+        json_tokener_free(json_parser);
+    if (json_config)
+        json_object_put(json_config);
+
     return ret;
 }

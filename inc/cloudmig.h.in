@@ -56,10 +56,12 @@ struct cldmig_config
 {
     char    src_profile[256];
     char    dst_profile[256];
+    char    status_profile[256];
     int     src_entry_count;
     int     dst_entry_count;
+    int     status_entry_count;
 };
-#define CONF_INITIALIZER {{0}, {0}, 0, 0}
+#define CONF_INITIALIZER {{0}, {0}, {0}, 0, 0, 0}
 
 /*
  * This structure gives information about one thread current actions

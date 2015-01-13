@@ -75,7 +75,7 @@ int main(int argc, char* argv[])
     if (retrieve_opts(&ctx.options, argc, argv) == EXIT_FAILURE)
         return (EXIT_FAILURE);
 
-    // Load a .ini configuration file
+    // Load a json configuration file
     if (ctx.options.config)
     {
         if (load_config(&ctx.config, &ctx.options) == EXIT_FAILURE)

@@ -120,9 +120,9 @@ transfer_data_chunk(struct cloudmig_ctx *ctx,
      * and insert it in the right info list.
      */
     // XXX we should use the thread_idx here instead of hard-coded index
-    ctx->tinfos[0].fdone += len;
+    ctx->tinfos[0].fdone += buflen;
     gettimeofday(&tv, NULL);
-    e = new_transf_info(&tv, len);
+    e = new_transf_info(&tv, buflen);
     if (e == NULL)
         PRINTERR("Could not update ETA block list, ETA might become erroneous");
     else

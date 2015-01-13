@@ -75,8 +75,21 @@ opt_dst_profile(struct cloudmig_options *options)
     return (EXIT_SUCCESS);
 }
 
+static int
+opt_status_profile(struct cloudmig_options *options)
+{
+    if (options->flags & STATUS_PROFILE_NAME
+        || options->status_profile)
+    {
+        PRINTERR("Status profile already defined.\n", 0);
+        return (EXIT_FAILURE);
+    }
+    options->status_profile = optarg;
+    return (EXIT_SUCCESS);
+}
+
 int
-opt_trace(struct cloudmig_options *options, char *arg)
+opt_trace(struct cloudmig_options *options, const char *arg)
 {
     while (*arg)
     {
@@ -113,15 +126,15 @@ opt_trace(struct cloudmig_options *options, char *arg)
             PRINTERR(
                 "Character %c is an invalid argument to droplet-trace option.\n"
                 "See manpage for more informations.\n", *arg);
-            return (EXIT_FAILURE);
+            return EXIT_FAILURE;
         }
         arg++;
     }
-    return (EXIT_SUCCESS);
+    return EXIT_SUCCESS;
 }
 
 int
-opt_buckets(struct cloudmig_options *options, char *arg)
+opt_buckets(struct cloudmig_options *options, const char *arg)
 {
     char    *src;
     char    *dst;
@@ -175,10 +188,14 @@ opt_buckets(struct cloudmig_options *options, char *arg)
 }
 
 int
-opt_verbose(char *arg)
+opt_verbose(const char *arg)
 {
     if (arg == NULL)
+    {
+        PRINTERR("Invalid verbose level: %s", arg);
         return EXIT_FAILURE;
+    }
+
     else if (strcmp(arg, "debug") == 0)
         gl_loglevel = DEBUG_LVL;
     else if (strcmp(arg, "info") == 0)
@@ -190,8 +207,11 @@ opt_verbose(char *arg)
     else if (strcmp(arg, "error") == 0)
         gl_loglevel = ERR_LVL;
     else
-        return (EXIT_FAILURE);
-    return (EXIT_SUCCESS);
+    {
+        PRINTERR("Invalid verbose level: %s", arg);
+        return EXIT_FAILURE;
+    }
+    return EXIT_SUCCESS;
 }
 
 // global var used with getopt
@@ -216,6 +236,7 @@ int retrieve_opts(struct cloudmig_options *options, int argc, char* argv[])
         /* Configuration-related options    */
         {"src-profile",         required_argument,  0, 's'},
         {"dst-profile",         required_argument,  0, 'd'},
+        {"status-profile",      required_argument,  0, 'S'},
         {"buckets",             required_argument,  0, 'b'},
         {"config",              required_argument,  0, 'c'},
         /* Status-related options           */
@@ -230,7 +251,7 @@ int retrieve_opts(struct cloudmig_options *options, int argc, char* argv[])
     };
 
     while ((cur_opt = getopt_long(argc, argv,
-                                  "-s:d:b:c:r:v:t:o:",
+                                  "-B:s:d:S:b:c:r:v:t:o:",
                                   long_options, &option_index)) != -1)
     {
         switch (cur_opt)
@@ -280,6 +301,10 @@ int retrieve_opts(struct cloudmig_options *options, int argc, char* argv[])
             if (opt_dst_profile(options))
                 return EXIT_FAILURE;
             break ;
+        case 'S':
+            if (opt_status_profile(options))
+                return EXIT_FAILURE;
+            break ;
         case 'b':
             if (opt_buckets(options, optarg))
                 return EXIT_FAILURE;
@@ -294,7 +319,7 @@ int retrieve_opts(struct cloudmig_options *options, int argc, char* argv[])
             break ;
         case 'c':
             if (options->config)
-                return (EXIT_FAILURE);
+                return EXIT_FAILURE;
             options->config = optarg;
             break ;
         case 'r':
@@ -302,23 +327,24 @@ int retrieve_opts(struct cloudmig_options *options, int argc, char* argv[])
             break ;
         case 't':
             if (opt_trace(options, optarg))
-                return (EXIT_FAILURE);
+                return EXIT_FAILURE;
             break;
 /*      case 'i':
             options->flags |= IGNORE_STATUS;
             break ; */
         case 'v':
-            opt_verbose(optarg);
+            if (opt_verbose(optarg) != EXIT_SUCCESS)
+                return EXIT_FAILURE;
             break ;
         case 'o':
             options->logfile = optarg;
             break ;
         default:
             // An error has already been printed by getopt...
-            return (EXIT_FAILURE);
+            return EXIT_FAILURE;
         }
     }
     if (options->config == NULL && cloudmig_options_check(options))
-        return (EXIT_FAILURE);
-    return (EXIT_SUCCESS);
+        return EXIT_FAILURE;
+    return EXIT_SUCCESS;
 }

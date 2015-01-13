@@ -93,10 +93,10 @@ char*     compute_status_bucket(char *src_host, char *dst_host)
 
 int load_status(struct cloudmig_ctx* ctx, char *src_host, char *dst_host)
 {
-     assert(ctx);
+    assert(ctx);
     int             ret = EXIT_SUCCESS;
     dpl_status_t    dplret;
-    int             resuming = 0; // differentiate resuming and starting mig'
+    int             resuming = 0; // differentiate resuming and starting
     dpl_vec_t       *src_buckets = NULL;
 
     cloudmig_log(INFO_LVL, "[Loading Status]: Starting status loading...\n");
@@ -105,10 +105,10 @@ int load_status(struct cloudmig_ctx* ctx, char *src_host, char *dst_host)
     if (ctx->status.bucket_name == NULL)
         ctx->status.bucket_name = compute_status_bucket(src_host, dst_host);
     if (ctx->status.bucket_name == NULL)
-        return (EXIT_FAILURE);
+        return EXIT_FAILURE;
 
     /*
-     * Now retrieve the bucket list for the source account
+     * Retrieve the bucket list for the source account
      * in order to check if the status bucket already exists or not
      *
      * By the way, we do not care about the destination's bucket list,
