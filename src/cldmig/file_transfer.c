@@ -27,22 +27,23 @@
 #include <errno.h>
 #include <string.h>
 #include <sys/time.h>
+#include <droplet.h>
+#include <droplet/vfs.h>
 
 #include "cloudmig.h"
 #include "options.h"
 
-#include <droplet/vfs.h>
 
 static int
 create_parent_dirs(struct cloudmig_ctx *ctx,
                    struct file_transfer_state *filestate)
 {
-    char    *nextdelim = filestate->dst;
+    char    *nextdelim = filestate->dst.name;
     dpl_status_t    dplret = DPL_SUCCESS;
 
     cloudmig_log(INFO_LVL,
                  "[Migrating]: Creating parent directories of file %s.\n",
-                 filestate->name);
+                 filestate->src.name);
 
     while ((nextdelim = strchr(nextdelim, '/')) != NULL)
     {
@@ -53,8 +54,8 @@ create_parent_dirs(struct cloudmig_ctx *ctx,
          */
         *nextdelim = '\0';
         cloudmig_log(INFO_LVL, "[Migrating]: Creating parent directory %s.\n",
-                     filestate->dst);
-        dplret = dpl_mkdir(ctx->dest_ctx, filestate->dst, NULL/*MD*/, NULL/*SYSMD*/);
+                     filestate->dst.name);
+        dplret = dpl_mkdir(ctx->dest_ctx, filestate->dst.name, NULL/*MD*/, NULL/*SYSMD*/);
         *nextdelim = '/';
         cloudmig_log(DEBUG_LVL,
                      "[Migrating]: Parent directory creation status : %s.\n",
@@ -73,43 +74,226 @@ err:
     return EXIT_FAILURE;
 }
 
-struct data_transfer
-{
-    dpl_vfile_t             *hfile;
-    struct cloudmig_ctx     *ctx;
-};
-
 /*
  * This callback receives the data read from a source,
  * and writes it into the destination file.
  */
 static dpl_status_t
-transfer_data_chunk(void* cb_data, char *buf, unsigned int len)
+transfer_data_chunk(struct cloudmig_ctx *ctx,
+                    struct file_transfer_state *filestate,
+                    dpl_vfile_t *src, dpl_vfile_t *dst)
 {
+    dpl_status_t            ret = DPL_FAILURE;
+    struct json_object      *src_status = NULL;
+    struct json_object      *dst_status = NULL;
+    char                    *buffer = NULL;
+    unsigned int            buflen = 0;
+    // For ETA data
     struct cldmig_transf    *e;
     struct timeval          tv;
-    struct data_transfer    *data = cb_data;
 
     cloudmig_log(DEBUG_LVL,
-    "[Migrating]: vFile %p : Transfering data chunk of %u bytes.\n",
-    data->hfile, len);
+                 "[Migrating]: %s : Transfering data chunk of %lu bytes.\n",
+                 filestate->src.name, ctx->options.block_size);
+
+    ret = dpl_fstream_get(src, ctx->options.block_size,
+                          &buffer, &buflen, &src_status);
+    if (ret != DPL_SUCCESS)
+    {
+        PRINTERR("Could not get next block from source file %s: %s",
+                 filestate->src.name, dpl_status_str(ret));
+        ret = DPL_FAILURE;
+        goto end;
+    }
+
+    ret = dpl_fstream_put(dst, buffer, buflen, &dst_status);
+    if (ret != DPL_SUCCESS)
+    {
+        PRINTERR("Could not put next block to destination file %s: %s",
+                 filestate->dst.name, dpl_status_str(ret));
+        ret = DPL_FAILURE;
+        goto end;
+    }
 
     /*
      * Here, create an element for the byte rate computing list
      * and insert it in the right info list.
      */
     // XXX we should use the thread_idx here instead of hard-coded index
-    data->ctx->tinfos[0].fdone += len;
+    ctx->tinfos[0].fdone += len;
     gettimeofday(&tv, NULL);
     e = new_transf_info(&tv, len);
-    insert_in_list(&data->ctx->tinfos[0].infolist, e);
+    if (e == NULL)
+        PRINTERR("Could not update ETA block list, ETA might become erroneous");
+    else
+        insert_in_list(&ctx->tinfos[0].infolist, e);
 
-    cloudmig_check_for_clients(data->ctx);
-    /* In any case, let's update a viewer-client if there's one */
-    cloudmig_update_client(data->ctx);
+    if (filestate->src.status)
+        json_object_put(filestate->src.status);
+    filestate->src.status = src_status;
+    src_status = NULL;
 
+    if (filestate->dst.status)
+        json_object_put(filestate->dst.status);
+    filestate->dst.status = dst_status;
+    dst_status = NULL;
 
-    return dpl_write(data->hfile, buf, len);
+    filestate->fixed.offset += buflen;
+
+    ret = DPL_SUCCESS;
+
+end:
+    if (buffer)
+        free(buffer);
+    if (src_status)
+        json_object_put(src_status);
+    if (dst_status)
+        json_object_put(dst_status);
+
+    return ret; /* dpl_write(data->hfile, buf, len); */
+}
+
+int
+transfer_chunked(struct cloudmig_ctx *ctx,
+                 struct file_transfer_state *filestate)
+{
+    int             ret = EXIT_FAILURE;
+    dpl_status_t    dplret = DPL_FAILURE;
+    dpl_vfile_t     *src = NULL;
+    dpl_vfile_t     *dst = NULL;
+
+    /*
+     * Open the source file for reading
+     */
+    dplret = dpl_open(ctx->src_ctx, filestate->src.name,
+                      DPL_VFILE_FLAG_RDONLY|DPL_VFILE_FLAG_STREAM,
+                      NULL /* opts */, NULL /* cond */,
+                      NULL/* MD */, NULL /* sysmd */,
+                      NULL /* query params */,
+                      filestate->src.status,
+                      &src);
+    if (dplret != DPL_SUCCESS)
+    {
+        PRINTERR("%s: Could not open source file %s: %s\n",
+                 __FUNCTION__, filestate->src.name, dpl_status_str(dplret));
+        goto err;
+    }
+
+    /*
+     * Open the destination file for writing
+     */
+    dplret = dpl_open(ctx->dest_ctx, filestate->dst.name,
+                      DPL_VFILE_FLAG_CREAT|DPL_VFILE_FLAG_WRONLY|DPL_VFILE_FLAG_STREAM,
+                      NULL /* opts */, NULL /* cond */,
+                      NULL /*MD*/, NULL/*SYSMD*/,
+                      NULL /* query params */,
+                      filestate->dst.status,
+                      &dst);
+    if (dplret != DPL_SUCCESS)
+    {
+        PRINTERR("%s: Could not open dest file %s: %s\n",
+                 __FUNCTION__, filestate->dst.name, dpl_status_str(dplret));
+        goto err;
+    }
+
+    /* Transfer the actual data */
+    while (filestate->fixed.offset < filestate->fixed.size)
+    {
+        ret = transfer_data_chunk(ctx, filestate, src, dst);
+        if (ret != EXIT_SUCCESS)
+            goto err;
+
+        /*
+         * XXX TODO FIXME TODO XXX
+         * Update bucket status
+         * XXX TODO FIXME TODO XXX
+        ret = transfer_state_save(ctx, filestate);
+        if (ret != EXIT_SUCCESS)
+            goto err;
+         */
+    }
+
+    /*
+     * Flush the destination stream to ensure everything is written and comitted
+     */
+    dplret = dpl_fstream_flush(dst);
+    if (DPL_SUCCESS != dplret)
+    {
+        PRINTERR("%s: Could not flush destination file %s: %s",
+                __FUNCTION__, filestate->dst.name, dpl_status_str(dplret));
+        goto err;
+    }
+
+    ret = EXIT_SUCCESS;
+
+err:
+    if (dst)
+    {
+        dplret = dpl_close(dst);
+        if (dplret != DPL_SUCCESS)
+        {
+            PRINTERR("%s: Could not close destination file %s: %s\n",
+                     __FUNCTION__, filestate->dst.name,
+                     dpl_status_str(dplret));
+        }
+    }
+
+    if (src)
+    {
+        dplret = dpl_close(src);
+        if (dplret != DPL_SUCCESS)
+        {
+            PRINTERR("%s: Could not close source file %s: %s\n",
+                     __FUNCTION__, filestate->src.name,
+                     dpl_status_str(dplret));
+        }
+    }
+
+    return ret;
+}
+
+int
+transfer_whole(struct cloudmig_ctx *ctx,
+               struct file_transfer_state *filestate)
+{
+    int             ret = EXIT_FAILURE;
+    dpl_status_t    dplret = DPL_FAILURE;
+    char            *buffer = NULL;
+    unsigned int    buflen = 0;
+    dpl_dict_t      *metadata = NULL;
+    dpl_sysmd_t     sysmd;
+
+    dplret = dpl_fget(ctx->src_ctx, filestate->src.name, NULL, NULL, NULL,
+                      &buffer, &buflen, &metadata, &sysmd);
+    if (dplret != DPL_SUCCESS)
+    {
+        ret = EXIT_FAILURE;
+        goto end;
+    }
+
+    dplret = dpl_fput(ctx->dest_ctx, filestate->dst.name, NULL, NULL, NULL,
+                      metadata, &sysmd, buffer, buflen);
+    if (dplret != DPL_SUCCESS)
+    {
+        ret = EXIT_FAILURE;
+        goto end;
+    }
+
+    /*
+     * XXX TODO FIXME TODO XXX
+     * Update bucket status
+     * XXX TODO FIXME TODO XXX
+     */
+
+    ret = EXIT_SUCCESS;
+
+end:
+    if (buffer)
+        free(buffer);
+    if (metadata)
+        dpl_dict_free(metadata);
+
+    return ret;
 }
 
 /*
@@ -118,18 +302,15 @@ transfer_data_chunk(void* cb_data, char *buf, unsigned int len)
  * and starts the transfer with a reading callback that will
  * write the data read into the file that is to be written.
  */
-// TODO FIXME : Do it with the correct attributes
 int
 transfer_file(struct cloudmig_ctx* ctx,
               struct file_transfer_state* filestate)
 {
     int                     ret = EXIT_FAILURE;
-    dpl_status_t            dplret;
-    struct data_transfer    cb_data = { .hfile=NULL, .ctx=ctx };
 
     cloudmig_log(INFO_LVL,
     "[Migrating] : file '%s' is a regular file : starting transfer...\n",
-    filestate->name);
+    filestate->src.name);
 
 
     if (ctx->tinfos[0].config_flags & AUTO_CREATE_DIRS)
@@ -138,48 +319,9 @@ transfer_file(struct cloudmig_ctx* ctx,
             goto err;
     }
 
-    /*
-     * First, open the destination file for writing, after
-     * retrieving the source file's canned acl.
-     */
-    dplret = dpl_openwrite(ctx->dest_ctx, filestate->dst,
-                           DPL_FTYPE_REG, DPL_VFILE_FLAG_CREAT,
-                           NULL, NULL /*MD*/, NULL/*SYSMD*/,
-                           filestate->fixed.size, NULL, &cb_data.hfile);
-    if (dplret != DPL_SUCCESS)
-    {
-        PRINTERR("%s: Could not open dest file %s: %s\n",
-                 __FUNCTION__, filestate->dst, dpl_status_str(dplret));
-        goto err;
-    }
-
-    /*
-     * Then open the source file for reading, with a callback
-     * that will transfer each data chunk.
-     */
-    dplret = dpl_openread(ctx->src_ctx, filestate->name,
-                          DPL_VFILE_FLAG_MD5,
-                          NULL/*cond*/, NULL /*range*/,
-                          transfer_data_chunk, &cb_data, // reading cb,data
-                          NULL/*MD*/, NULL/*sysmd*/);
-    if (dplret != DPL_SUCCESS)
-    {
-        PRINTERR("%s: Could not open source file %s: %s\n",
-                 __FUNCTION__, filestate->name, dpl_status_str(dplret));
-        goto err;
-    }
-
-    /* And finally, close the destination file written... */
-    dplret = dpl_close(cb_data.hfile);
-    if (dplret != DPL_SUCCESS)
-    {
-        PRINTERR("%s: Could not close destination file %s: %s\n",
-                 __FUNCTION__, filestate->dst,
-                 dpl_status_str(dplret));
-    }
-    cb_data.hfile = NULL;
-
-    ret = EXIT_SUCCESS;
+    ret = (filestate->fixed.size > ctx->options.block_size) ?
+          transfer_chunked(ctx, filestate)
+        : transfer_whole(ctx, filestate);
 
     /* 
      * Now update the transfered size in the general status
@@ -192,11 +334,10 @@ transfer_file(struct cloudmig_ctx* ctx,
     // TODO Unlock general status
 
     cloudmig_log(INFO_LVL, "[Migrating] File '%s' transfered successfully !\n",
-                 filestate->name);
+                 filestate->src.name);
 
 err:
-    if (cb_data.hfile)
-        dpl_close(cb_data.hfile);
+
     return ret;
 }
 
@@ -210,20 +351,20 @@ create_directory(struct cloudmig_ctx* ctx,
 
     cloudmig_log(INFO_LVL,
 "[Migrating] : file '%s' is a directory: creating dest dir...\n",
-             filestate->name);
+             filestate->src.name);
 
     /* 
      * FIXME : WORKAROUND : replace the last delimiter by a nul char
      * Since the dpl_mkdir function seems to fail when the last char is a delim
      */
-    filestate->dst[strlen(filestate->dst) - 1] = 0;
-    dplret = dpl_mkdir(ctx->dest_ctx, filestate->dst, NULL/*MD*/, NULL/*SYSMD*/);
-    filestate->dst[strlen(filestate->dst)] = '/';
+    filestate->dst.name[strlen(filestate->dst.name) - 1] = 0;
+    dplret = dpl_mkdir(ctx->dest_ctx, filestate->dst.name, NULL/*MD*/, NULL/*SYSMD*/);
+    filestate->dst.name[strlen(filestate->dst.name)] = '/';
     // TODO FIXME With correct attributes
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not create destination dir '%s': %s\n",
-                 __FUNCTION__, filestate->dst, dpl_status_str(dplret));
+                 __FUNCTION__, filestate->dst.name, dpl_status_str(dplret));
         goto end;
     }
 
@@ -233,7 +374,7 @@ create_directory(struct cloudmig_ctx* ctx,
 
     cloudmig_log(INFO_LVL,
                  "[Migrating] : directory '%s' successfully created !\n",
-                 filestate->dst);
+                 filestate->dst.name);
 
 end:
 

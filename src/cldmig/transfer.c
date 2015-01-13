@@ -37,7 +37,7 @@
 static dpl_ftype_t
 get_migrating_file_type(struct file_transfer_state* filestate)
 {
-    if (filestate->name[strlen(filestate->name) - 1] == '/')
+    if (filestate->src.name[strlen(filestate->src.name) - 1] == '/')
         return DPL_FTYPE_DIR;
     return DPL_FTYPE_REG;
 }
@@ -51,7 +51,7 @@ migrate_object(struct cloudmig_ctx* ctx,
 
     cloudmig_log(DEBUG_LVL,
                  "[Migrating] : starting migration of file %s to %s.\n",
-                 filestate->name, filestate->dst);
+                 filestate->src.name, filestate->dst.name);
 
     /*
      * First init the thread's internal data
@@ -60,7 +60,7 @@ migrate_object(struct cloudmig_ctx* ctx,
     ctx->tinfos[0].fsize = filestate->fixed.size;
     ctx->tinfos[0].fdone = filestate->fixed.offset;
     ctx->tinfos[0].fnamlen = filestate->fixed.namlen;
-    ctx->tinfos[0].fname = filestate->name;
+    ctx->tinfos[0].fname = filestate->src.name;
     // XXX Unlock it
 retry:
     switch (get_migrating_file_type(filestate))
@@ -73,12 +73,12 @@ retry:
             {
                 cloudmig_log(ERR_LVL,
                     "[Migrating] : failure, retrying migration of file %s.\n",
-                             filestate->name);
+                             filestate->src.name);
                 goto retry;
             }
             cloudmig_log(ERR_LVL,
                 "[Migrating] : Could not migrate file %s...\n",
-                filestate->name);
+                filestate->src.name);
             goto ret;
         }
         break ;
@@ -90,25 +90,25 @@ retry:
             {
                 cloudmig_log(WARN_LVL,
                     "[Migrating] : failure, retrying migration of file %s.\n",
-                             filestate->name);
+                             filestate->src.name);
                 goto retry;
             }
             cloudmig_log(ERR_LVL,
                 "[Migrating] : Could not migrate file %s...\n",
-                filestate->name);
+                filestate->src.name);
             goto ret;
         }
         break ;
     default:
         PRINTERR("%s: File %s has no type attributed ? not transfered...\n",
-                 __FUNCTION__, filestate->name);
+                 __FUNCTION__, filestate->src.name);
         break ;
     }
     status_update_entry(ctx, filestate, filestate->fixed.size);
 
     cloudmig_log(INFO_LVL,
     "[Migrating] : file %s migrated to %s.\n",
-                 filestate->name, filestate->dst);
+                 filestate->src.name, filestate->dst.name);
 
 ret:
     /*
@@ -134,7 +134,7 @@ static int
 migrate_loop(struct cloudmig_ctx* ctx)
 {
     unsigned int                ret = EXIT_FAILURE;
-    struct file_transfer_state  cur_filestate = {{0, 0, 0}, NULL, NULL, 0, 0};
+    struct file_transfer_state  cur_filestate = CLOUDMIG_FILESTATE_INITIALIZER;
     size_t                      nbfailures = 0;
 
     // The call allocates the buffer for the bucket, so we must free it
@@ -146,16 +146,16 @@ migrate_loop(struct cloudmig_ctx* ctx)
             ++nbfailures;
 
         // Clean up datas...
-        free(cur_filestate.name);
-        free(cur_filestate.dst);
-        cur_filestate.name = NULL;
-        cur_filestate.dst= NULL;
+        free(cur_filestate.src.name);
+        free(cur_filestate.dst.name);
+        cur_filestate.src.name = NULL;
+        cur_filestate.dst.name = NULL;
     }
 
-    if (cur_filestate.name)
-        free(cur_filestate.name);
-    if (cur_filestate.dst)
-        free(cur_filestate.dst);
+    if (cur_filestate.src.name)
+        free(cur_filestate.src.name);
+    if (cur_filestate.dst.name)
+        free(cur_filestate.dst.name);
 
     return (ret == ENODATA ? nbfailures : ret);
 }

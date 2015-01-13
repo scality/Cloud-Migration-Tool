@@ -31,45 +31,14 @@
 #include <droplet/vfs.h>
 
 /*
- * Callback function for dpl_openread (needs a callback for each chunk
- * of data received)
- *
- * It appends each chunk of data to the buf of the transfer_state
- */
-static dpl_status_t cloudmig_append_buffer_to_bucket_state(void* ctx,
-                                                           char* buf,
-                                                           unsigned int len)
-{
-    struct transfer_state* state = ctx;
-    dpl_status_t    ret = DPL_FAILURE;
-
-    int newlen = state->next_entry_off + len;
-    state->buf = realloc(state->buf, newlen);
-    if (state->buf == NULL)
-    {
-        ret = DPL_ENOMEM;
-        goto err;
-    }
-    memmove(state->buf + state->next_entry_off, buf, len);
-    state->next_entry_off += len;
-
-    ret = DPL_SUCCESS;
-
-err:
-    
-    return ret;
-}
-
-
-/*
  * Maps a bucket state's file into memory using dpl_openread.
  */
 int cloudmig_map_bucket_state(struct cloudmig_ctx* ctx,
-                              struct transfer_state* bucket_state)
+                              struct bucket_status* bucket_state)
 {
     dpl_status_t        dplret;
     int                 ret = EXIT_FAILURE;
-    dpl_dict_t          *metadata;
+    dpl_dict_t          *metadata = NULL;
     char*               ctx_bucket = ctx->src_ctx->cur_bucket;
 
     /*
@@ -80,11 +49,10 @@ int cloudmig_map_bucket_state(struct cloudmig_ctx* ctx,
      */
     ctx->src_ctx->cur_bucket = ctx->status.bucket_name;
     bucket_state->next_entry_off = 0;
-    dplret = dpl_openread(ctx->src_ctx, bucket_state->filename,
-                          DPL_VFILE_FLAG_MD5,
-                          NULL/*cond*/, NULL/*range*/,
-                          &cloudmig_append_buffer_to_bucket_state, bucket_state,
-                          &metadata, NULL/*sysmd*/);
+    dplret = dpl_fget(ctx->src_ctx, bucket_state->filename,
+                      NULL/*opt*/, NULL/*cond*/, NULL/*range*/,
+                      &bucket_state->buf, &bucket_state->size,
+                      NULL/*MD*/, NULL/*sysmd*/);
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not map bucket status file %s : %s\n",

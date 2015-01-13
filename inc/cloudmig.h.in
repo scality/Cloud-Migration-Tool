@@ -102,7 +102,7 @@ int     status_next_incomplete_entry(struct cloudmig_ctx *ctx,
                                      struct file_transfer_state *filestate);
 int		status_update_entry(struct cloudmig_ctx *ctx,
                             struct file_transfer_state *filestate,
-                            int32_t offset);
+                            uint64_t offset);
 int     migrate(struct cloudmig_ctx *ctx);
 void    cloudmig_check_for_clients(struct cloudmig_ctx *ctx);
 void    cloudmig_update_client(struct cloudmig_ctx *ctx);

@@ -255,21 +255,21 @@ int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
                 // Not checked since the filename should always be a .cloudmig
                 char* buckname_end = strrchr(bst->filename, '.');
                 // compute the whole filename in the form  srcbucket:filename
-                if (asprintf(&filestate->name, "%.*s:/%s",
+                if (asprintf(&filestate->src.name, "%.*s:/%s",
                              (int)(buckname_end - bst->filename),
                              bst->filename, (char*)(fste+1)) == -1)
                 {
-                    filestate->name = NULL;
+                    filestate->src.name = NULL;
                     PRINTERR("%s: could not compute src file name : %s",
                              __FUNCTION__, strerror(errno));
                     goto err;
                 }
 
                 // compute the whole filename in the form  dstbucket:filename
-                if (asprintf(&filestate->dst, "%s:/%s",
+                if (asprintf(&filestate->dst.name, "%s:/%s",
                              bst->dest_bucket, (char*)(fste+1)) == -1)
                 {
-                    filestate->dst = NULL;
+                    filestate->dst.name = NULL;
                     PRINTERR("%s: could not compute dest file name : %s",
                              __FUNCTION__, strerror(errno));
                     goto err;
@@ -277,7 +277,7 @@ int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
 
                 cloudmig_log(WARN_LVL,
                 "[Migrating]: Found an incompletely transfered file :"
-                " '%s' to '%s'...\n", filestate->name, filestate->dst);
+                " '%s' to '%s'...\n", filestate->src.name, filestate->dst.name);
 
                 // For the threading :
                 // Reference counter over the use of the buffer, in order
@@ -322,15 +322,15 @@ int status_next_incomplete_entry(struct cloudmig_ctx* ctx,
     return ret;
 
 err:
-    if(filestate->name)
+    if(filestate->src.name)
     {
-        free(filestate->name);
-        filestate->name = NULL;
+        free(filestate->src.name);
+        filestate->src.name = NULL;
     }
-    if (filestate->dst)
+    if (filestate->dst.name)
     {
-        free(filestate->dst);
-        filestate->dst = NULL;
+        free(filestate->dst.name);
+        filestate->dst.name = NULL;
     }
     filestate->fixed.size = 0;
     filestate->fixed.offset = 0;
@@ -340,25 +340,23 @@ err:
 }
 
 /*
- * Function called when a file has been transfered successfully.
+ * Function called when a file (or part of it) has been transfered successfully.
  * It updates the status of the matching bucket as well as the general
  * status.
  */
 int		status_update_entry(struct cloudmig_ctx *ctx,
-                            struct file_transfer_state *fst,
-                            int32_t done_offset)
+                                    struct file_transfer_state *filestate,
+                                    uint64_t done_offset)
 {
     int             ret = EXIT_FAILURE;
     dpl_status_t    dplret;
-    dpl_vfile_t     *hfile = NULL;
-    dpl_vfile_t     *hfile_genst = NULL;
     char            *ctx_bck = ctx->src_ctx->cur_bucket;
     ctx->src_ctx->cur_bucket = ctx->status.bucket_name;
-    struct bucket_status   *bst = &ctx->status.buckets[fst->state_idx];
+    struct bucket_status   *bst = &ctx->status.buckets[filestate->state_idx];
 
     cloudmig_log(INFO_LVL,
         "[Updating status]: File %s done up to %li/%li bytes.\n",
-        fst->name, done_offset, fst->fixed.size);
+        filestate->src.name, done_offset, filestate->fixed.size);
     
     if (bst->buf == NULL)
     {
@@ -372,14 +370,14 @@ int		status_update_entry(struct cloudmig_ctx *ctx,
      * store the transfered file's size +1, in order to identify
      * finished transfers and unfinished ones.
      */
-    ((struct file_state_entry*)(bst->buf + fst->offset))->offset =
+    ((struct file_state_entry*)(bst->buf + filestate->offset))->offset =
         htonl(done_offset + 1);
     // TODO Unlock bst
 
-    dplret = dpl_openwrite(ctx->src_ctx, bst->filename,
-                           DPL_FTYPE_REG, DPL_VFILE_FLAG_MD5,
-			   NULL, NULL/* MD */, NULL /* SYSMD */,
-                           bst->size, NULL, &hfile);
+    dplret = dpl_fput(ctx->src_ctx, bst->filename,
+                      NULL/*opt*/, NULL/*cond*/, NULL/*range*/,
+                      NULL/* MD */, NULL /* SYSMD */,
+                      bst->buf, bst->size);
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not open status file %s for updating.\n",
@@ -387,17 +385,7 @@ int		status_update_entry(struct cloudmig_ctx *ctx,
         goto end;
     }
 
-    dplret = dpl_write(hfile, bst->buf, bst->size);
-    if (dplret != DPL_SUCCESS)
-    {
-        PRINTERR("%s: Could not write buffer to status file %s for updating.\n",
-                 __FUNCTION__, bst->filename);
-        goto end;
-    }
-    dpl_close(hfile);
-    hfile = NULL;
-
-    cloudmig_log(DEBUG_LVL, "[Updating status]: File %s updated.\n", fst->name);
+    cloudmig_log(DEBUG_LVL, "[Updating status]: File %s updated.\n", filestate->src.name);
 
     // TODO Lock bst
     bst->refcount -= 1;
@@ -413,25 +401,16 @@ int		status_update_entry(struct cloudmig_ctx *ctx,
      * It should have already been done in the transfer callback
      * */
     // TODO Lock general status
-    if (done_offset == fst->fixed.size)
+    if (done_offset == filestate->fixed.size)
         ctx->status.general.head.done_objects += 1;
     ((struct cldmig_state_header*)ctx->status.general.buf)->done_sz =
         htobe64(ctx->status.general.head.done_sz);
     ((struct cldmig_state_header*)ctx->status.general.buf)->done_objects =
         htobe64(ctx->status.general.head.done_objects);
-    dplret = dpl_openwrite(ctx->src_ctx, ".cloudmig",
-                           DPL_FTYPE_REG, DPL_VFILE_FLAG_MD5,
-                           NULL, NULL/*md*/, NULL/*sysmd*/,
-                           ctx->status.general.size, NULL, &hfile_genst);
-    if (dplret != DPL_SUCCESS)
-    {
-        PRINTERR("%s: Could not open general status file for update.\n",
-                 __FUNCTION__);
-        goto end;
-    }
-
-    dplret = dpl_write(hfile_genst,
-                       ctx->status.general.buf, ctx->status.general.size);
+    dplret = dpl_fput(ctx->src_ctx, ".cloudmig",
+                      NULL/*opt*/, NULL/*cond*/, NULL/*range*/,
+                      NULL/* MD */, NULL /* SYSMD */,
+                      ctx->status.general.buf, ctx->status.general.size);
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not update general status file.\n", __FUNCTION__);
@@ -440,10 +419,6 @@ int		status_update_entry(struct cloudmig_ctx *ctx,
     // TODO Unlock general status
 
 end:
-    if (hfile)
-        dpl_close(hfile);
-    if (hfile_genst)
-        dpl_close(hfile_genst);
     ctx->src_ctx->cur_bucket = ctx_bck;
     return ret; 
 }

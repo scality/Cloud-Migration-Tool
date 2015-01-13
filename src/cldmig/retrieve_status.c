@@ -34,25 +34,6 @@
 
 #include <droplet/vfs.h>
 
-struct migration_status
-{
-    char    *buf;
-    size_t  size;
-    size_t  offset;
-};
-
-dpl_status_t    migst_cb(void *data, char *buf, unsigned int len)
-{
-    assert(((struct migration_status*)data)->offset + len
-           <= ((struct migration_status*)data)->size);
-
-
-    memcpy(((struct migration_status*)data)->buf
-            + ((struct migration_status*)data)->offset, buf, len);
-    ((struct migration_status*)data)->offset += len;
-    return DPL_SUCCESS;
-}
-
 static int status_retrieve_associated_buckets(struct cloudmig_ctx* ctx,
                                               size_t fsize)
 {
@@ -60,33 +41,32 @@ static int status_retrieve_associated_buckets(struct cloudmig_ctx* ctx,
     dpl_status_t                dplret;
     dpl_dict_t                  *metadata = NULL;
     struct cldmig_state_entry   *entry = NULL;
-    struct migration_status     status = {NULL, fsize, 0};
+    char                        *buffer = NULL;
+    unsigned int                buflen = 0;
 
     cloudmig_log(INFO_LVL,
                  "[Loading Status]: Retrieving source/destination"
                  " buckets associations...\n");
 
-    status.buf = calloc(fsize, sizeof(*status.buf));
-    if (status.buf == NULL)
+    if (ctx->status.general.buf == NULL)
     {
         PRINTERR("%s: Could not allocate memory for migration status buffer.\n",
                  __FUNCTION__);
         goto end;
     }
-    ctx->status.general.size = fsize;
-    ctx->status.general.buf = status.buf;
 
-    dplret = dpl_openread(ctx->src_ctx, ".cloudmig",
-                          DPL_VFILE_FLAG_MD5,
-                          NULL/*cond*/, NULL/*range*/,
-                          &migst_cb, &status,
-                          &metadata, NULL/*sysmd*/);
+    dplret = dpl_fget(ctx->src_ctx, ".cloudmig",
+                      NULL /*opt*/, NULL/*cond*/, NULL/*range*/,
+                      &buffer, &buflen, &metadata, NULL/*sysmd*/);
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not read the general migration status file: %s.\n",
                  __FUNCTION__, dpl_status_str(dplret));
         goto end;
     }
+    ctx->status.general.buf = buffer;
+    ctx->status.general.size = fsize;
+    buffer= NULL;
 
     /*
      * Now that we mapped the status file,
@@ -95,16 +75,16 @@ static int status_retrieve_associated_buckets(struct cloudmig_ctx* ctx,
      */
     // Switch from big endian 64 to host endian
     ctx->status.general.head.total_sz =
-        be64toh(((struct cldmig_state_header*)status.buf)->total_sz);
+        be64toh(((struct cldmig_state_header*)ctx->status.general.buf)->total_sz);
     ctx->status.general.head.done_sz =
-        be64toh(((struct cldmig_state_header*)status.buf)->done_sz);
+        be64toh(((struct cldmig_state_header*)ctx->status.general.buf)->done_sz);
     ctx->status.general.head.nb_objects =
-        be64toh(((struct cldmig_state_header*)status.buf)->nb_objects);
+        be64toh(((struct cldmig_state_header*)ctx->status.general.buf)->nb_objects);
     ctx->status.general.head.done_objects =
-        be64toh(((struct cldmig_state_header*)status.buf)->done_objects);
+        be64toh(((struct cldmig_state_header*)ctx->status.general.buf)->done_objects);
     // Now map the matching buckets
-    for (entry = (void*)status.buf + sizeof(struct cldmig_state_header);
-         (long int)entry < (long int)(status.buf + status.size);
+    for (entry = (void*)ctx->status.general.buf + sizeof(struct cldmig_state_header);
+         (long int)entry < (long int)(ctx->status.general.buf + ctx->status.general.size);
          entry = (void*)((char*)(entry) + sizeof(*entry)
                          + ntohl(entry->file) + ntohl(entry->bucket)))
     {
@@ -144,11 +124,9 @@ static int status_retrieve_associated_buckets(struct cloudmig_ctx* ctx,
         "[Loading Status]: Source/Destination"
         " buckets associations done.\n");
 
-    status.buf = 0;
-
 end:
-    if (status.buf)
-        free(status.buf);
+    if (buffer)
+        free(buffer);
     if (metadata)
         dpl_dict_free(metadata);
     return ret;

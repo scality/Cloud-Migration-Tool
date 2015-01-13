@@ -114,31 +114,34 @@ int main(int argc, char* argv[])
 
     // Retrieve hosts strings for source/dest
     {
-	dplret = dpl_addrlist_get_nth(ctx.src_ctx->addrlist,
-				      ctx.src_ctx->cur_host,
-				      &src_hostname, NULL, NULL, NULL);
-	if (dplret != DPL_SUCCESS)
-	{
-	    src_hostname = strdup("local_posix");
-	    if (dplret != DPL_ENOENT || src_hostname == NULL)
-	    {
-		PRINTERR("Could not retrieve host from the source addrlist", 0);
-		goto failure;
-	    }
+        dpl_addr_t  *addr = NULL;
+	dplret = dpl_addrlist_get_nth(ctx.src_ctx->addrlist, 0, &addr);
+	if (dplret != DPL_SUCCESS && dplret != DPL_ENOENT)
+        {
+            PRINTERR("Could not retrieve host from the source addrlist", 0);
+            goto failure;
 	}
+        src_hostname = strdup(ret == DPL_ENOENT ? "local_posix" : addr->host);
+        if (src_hostname == NULL)
+        {
+            PRINTERR("Could not retrieve host from the source addrlist: "
+                     "strdup failed", 0);
+            goto failure;
+        }
 
-	dplret = dpl_addrlist_get_nth(ctx.dest_ctx->addrlist,
-				      ctx.dest_ctx->cur_host,
-				      &dst_hostname, NULL, NULL, NULL);
-	if (dplret != DPL_SUCCESS)
-	{
-	    dst_hostname = strdup("local_posix");
-	    if (dplret != DPL_ENOENT || dst_hostname == NULL)
-	    {
-		PRINTERR("Could not retrieve host from the dest addrlist", 0);
-		goto failure;
-	    }
+	dplret = dpl_addrlist_get_nth(ctx.dest_ctx->addrlist, 0, &addr);
+	if (dplret != DPL_SUCCESS && dplret != DPL_ENOENT)
+        {
+            PRINTERR("Could not retrieve host from the dest addrlist", 0);
+            goto failure;
 	}
+        dst_hostname = strdup(ret == DPL_ENOENT ? "local_posix" : addr->host);
+        if (dst_hostname == NULL)
+        {
+            PRINTERR("Could not retrieve host from the dest addrlist: "
+                     "strdup failed", 0);
+            goto failure;
+        }
     }
     if (setup_var_pid_and_sock(src_hostname,
                                dst_hostname) == EXIT_FAILURE)

@@ -89,8 +89,8 @@ struct cldmig_status
 struct file_state_entry
 {
     int32_t     namlen;     // calculated with ROUND_NAMLEN
-    int32_t     size;       // size of the file
-    int32_t     offset;     // offset/quantity already copied
+    uint64_t    size;       // size of the file
+    uint64_t    offset;     // offset/quantity already copied
     /*
     int8_t      dpl_location;
     int8_t      dpl_acl;
@@ -99,17 +99,33 @@ struct file_state_entry
 };
 
 /*
- * Structure used for an entry in the bucket status file
+ * Structure used to describe an entry in the bucket status file
  */
 struct file_transfer_state
 {
     struct file_state_entry fixed;  // fixed
-    char                    *name;  // name of the file
-    char                    *dst;   // name of the dest file
+    struct {
+        char                    *name;
+        struct json_object      *status;
+    }                       src;
+    struct {
+        char                    *name;
+        struct json_object      *status;
+    }                       dst;
+
     // Data allowing to retrieve easily where does this entry come from
     int                     state_idx;
     unsigned int            offset;
 };
+
+#define CLOUDMIG_FILESTATE_INITIALIZER \
+    {                                  \
+        { 0, 0, 0 },                   \
+        { NULL, NULL },                \
+        { NULL, NULL },                \
+        0,                             \
+        0                              \
+    }
 
 
 
@@ -127,7 +143,7 @@ struct bucket_status
     char                        *filename;      // name of the status file
     char                        *dest_bucket;   // name of the destination bckt
     unsigned int                refcount;
-    size_t                      size;           // size of the status file
+    unsigned int                size;           // size of the status file
     char                        *buf;           // file's content.
     unsigned int                next_entry_off; // index on the next entry
 };
