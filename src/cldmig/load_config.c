@@ -378,16 +378,32 @@ config_update_options(struct cldmig_config *conf,
         switch (json_object_get_type(val))
         {
         case json_type_boolean:
-            fprintf(profile, "%s=%i\n", key, !!json_object_get_boolean(val));
+            if (fprintf(profile, "%s=%i\n", key, !!json_object_get_boolean(val)) <= 0)
+            {
+                PRINTERR("Could not write entry from config into generated profile.");
+                return EXIT_FAILURE;
+            }
             break ;
         case json_type_double:
-            fprintf(profile, "%s=%f\n", key, json_object_get_double(val));
+            if (fprintf(profile, "%s=%f\n", key, json_object_get_double(val)) <= 0)
+            {
+                PRINTERR("Could not write entry from config into generated profile.");
+                return EXIT_FAILURE;
+            }
             break ;
         case json_type_int:
-            fprintf(profile, "%s=%i\n", key, json_object_get_int(val));
+            if (fprintf(profile, "%s=%i\n", key, json_object_get_int(val)) <= 0)
+            {
+                PRINTERR("Could not write entry from config into generated profile.");
+                return EXIT_FAILURE;
+            }
             break ;
         case json_type_string:
-            fprintf(profile, "%s=%s\n", key, json_object_get_string(val));
+            if (fprintf(profile, "%s=%s\n", key, json_object_get_string(val)) <= 0)
+            {
+                PRINTERR("Could not write entry from config into generated profile.");
+                return EXIT_FAILURE;
+            }
             break ;
         case json_type_object:
         case json_type_array:
@@ -397,7 +413,11 @@ config_update_options(struct cldmig_config *conf,
                      json_object_get_type(val));
             return EXIT_FAILURE;
         }
-        fflush(profile);
+        if (fflush(profile) <= 0)
+        {
+            PRINTERR("Could not fflush generated profile");
+            return EXIT_FAILURE;
+        }
         *countp += 1;
     }
 
@@ -441,6 +461,7 @@ load_config(struct cldmig_config *conf, struct cloudmig_options *options)
     FILE                *src_profile = NULL;
     FILE                *dst_profile = NULL;
     FILE                *status_profile = NULL;
+    int                 unlink_profiles = 1;
 
     cloudmig_log(DEBUG_LVL, "[Loading Config]: Starting configuration file parsing.\n");
 
@@ -483,36 +504,26 @@ load_config(struct cldmig_config *conf, struct cloudmig_options *options)
         goto err;
     }
 
-    // All is well : set the right profiles for the droplet config loading.
-    if (options->flags & SRC_PROFILE_NAME)
-        options->flags ^= SRC_PROFILE_NAME;
-    if (options->flags & DEST_PROFILE_NAME)
-        options->flags ^= DEST_PROFILE_NAME;
-    if (options->flags & STATUS_PROFILE_NAME)
-        options->flags ^= STATUS_PROFILE_NAME;
-    options->src_profile = conf->src_profile;
-    options->dest_profile = conf->dst_profile;
-    options->status_profile = conf->status_profile;
-
-    if (conf->src_entry_count == 0)
+    /*
+     * Configuration successfully loaded.
+     *
+     * - Ensure that configuration is overriden by CLI options.
+     * - Ensure status to be the right default (local FS = posix backend)
+     */
+    if (options->src_profile == NULL && conf->src_entry_count > 0)
     {
-        PRINTERR("[Loading Config]: No configuration for source profile!\n", 0);
-        ret = EXIT_FAILURE;
-        goto err;
+        options->flags &= ~SRC_PROFILE_NAME;
+        options->src_profile = conf->src_profile;
     }
-    if (conf->dst_entry_count == 0)
+    if (options->dest_profile == NULL && conf->dst_entry_count > 0)
     {
-        PRINTERR("[Loading Config]: No configuration for"
-                 " destination profile!\n", 0);
-        ret = EXIT_FAILURE;
-        goto err;
+        options->flags &= ~DEST_PROFILE_NAME;
+        options->dest_profile = conf->dst_profile;
     }
-    if (conf->status_entry_count == 0)
+    if (options->status_profile == NULL && conf->status_entry_count > 0)
     {
-        PRINTERR("[Loading Config]: No configuration for"
-                 " status profile!\n", 0);
-        ret = EXIT_FAILURE;
-        goto err;
+        options->flags &= ~STATUS_PROFILE_NAME;
+        options->status_profile = conf->status_profile;
     }
 
     if (cloudmig_options_check(options))
@@ -520,6 +531,8 @@ load_config(struct cldmig_config *conf, struct cloudmig_options *options)
         ret = EXIT_FAILURE;
         goto err;
     }
+
+    unlink_profiles = 0;
 
     ret = EXIT_SUCCESS;
 
@@ -530,6 +543,13 @@ err:
         fclose(src_profile);
     if (dst_profile != NULL)
         fclose(dst_profile);
+
+    if (unlink_profiles)
+    {
+        unlink(conf->src_profile);
+        unlink(conf->dst_profile);
+        unlink(conf->status_profile);
+    }
 
     if (json_parser)
         json_tokener_free(json_parser);

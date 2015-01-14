@@ -24,6 +24,9 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
+#include <sys/stat.h>
+#include <sys/types.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -33,21 +36,91 @@
 #include "options.h"
 #include "cloudmig.h"
 
+static int
+_options_setup_default_status(struct cloudmig_options *options)
+{
+    int  ret;
+    char *profilepath = NULL;
+    char *posixpath = NULL;
+    FILE *profile = NULL;
+
+    ret = asprintf(&profilepath, "/tmp/cldmig_status.profile");
+    if (ret <= 0)
+    {
+        PRINTERR("Could not allocate path for default status profile.\n");
+        ret = EXIT_FAILURE;
+        goto err;
+    }
+
+    ret = asprintf(&posixpath, "/home/%s/.cloudmig", getenv("USER"));
+    if (ret <= 0)
+    {
+        PRINTERR("Could not allocate path for default status profile.\n");
+        ret = EXIT_FAILURE;
+        goto err;
+    }
+
+    if (mkdir(posixpath, 0700) < 0)
+    {
+        PRINTERR("Cannot create local directory '%s'"
+                 " for status storage.", posixpath);
+        ret = EXIT_FAILURE;
+        goto err;
+    }
+
+    profile = fopen(profilepath, "w+");
+    if (profile == NULL)
+    {
+        PRINTERR("Cannot open status profile temp file.");
+        ret = EXIT_FAILURE;
+        goto err;
+    }
+
+    if (fprintf(profile, "backend=posix\nbase_path=%s\n", getenv("USER")) <= 0
+        || fflush(profile) <= 0)
+    {
+        PRINTERR("Could not generated default profile for status storage.\n");
+        ret = EXIT_FAILURE;
+        goto err;
+    }
+
+    options->flags &= ~STATUS_PROFILE_NAME;
+    options->status_profile = profilepath;
+    profilepath = NULL;
+
+    ret = EXIT_SUCCESS;
+
+err:
+    if (posixpath)
+        free(posixpath);
+    if (profilepath)
+        free(profilepath);
+    if (profile)
+        fclose(profile);
+
+    return ret;
+}
 
 int
 cloudmig_options_check(struct cloudmig_options *options)
 {
     if (!options->src_profile)
     {
-        PRINTERR("No source defined for the migration.\n", 0);
-        return (EXIT_FAILURE);
+        PRINTERR("No source defined for the migration.\n");
+        return EXIT_FAILURE;
     }
     if (!options->dest_profile)
     {
-        PRINTERR("No destination defined for the migration.\n", 0);
-        return (EXIT_FAILURE);
+        PRINTERR("No destination defined for the migration.\n");
+        return EXIT_FAILURE;
     }
-    return (EXIT_SUCCESS);
+    if (!options->status_profile
+        && _options_setup_default_status(options) != EXIT_SUCCESS)
+    {
+        PRINTERR("No status storage could be setup for the migration.\n");
+        return EXIT_FAILURE;
+    }
+    return EXIT_SUCCESS;
 }
 
 static int
@@ -286,6 +359,11 @@ int retrieve_opts(struct cloudmig_options *options, int argc, char* argv[])
             {
                 options->flags |= DEST_PROFILE_NAME;
                 options->dest_profile = optarg;
+            }
+            else if (!options->status_profile)
+            {
+                options->flags |= STATUS_PROFILE_NAME;
+                options->status_profile = optarg;
             }
             else
             {
