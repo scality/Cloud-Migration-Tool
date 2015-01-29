@@ -26,74 +26,93 @@
 
 #include <unistd.h>
 
-#include "cloudmig.h"
-
+#include <droplet.h>
 #include <droplet/vfs.h>
 
-/*
- * Maps a bucket state's file into memory using dpl_openread.
- */
-int cloudmig_map_bucket_state(struct cloudmig_ctx* ctx,
-                              struct bucket_status* bucket_state)
+#include "cloudmig.h"
+
+char *cloudmig_urlencode(const char *str, size_t strlen)
 {
-    dpl_status_t        dplret;
-    int                 ret = EXIT_FAILURE;
-    dpl_dict_t          *metadata = NULL;
-    char*               ctx_bucket = ctx->src_ctx->cur_bucket;
+    static char hex[] = "0123456789abcdef";
+    char    *ret = NULL;
+    char    *encstr = NULL;
+    size_t  i;
 
-    /*
-     * This function uses the bucket_state as private data for the callback.
-     *
-     * It uses the field next_entry_off to set the quantity of data received
-     * so it needs to be reset to 0 afterwards (done in func end).
-     */
-    ctx->src_ctx->cur_bucket = ctx->status.bucket_name;
-    bucket_state->next_entry_off = 0;
-    dplret = dpl_fget(ctx->src_ctx, bucket_state->filename,
-                      NULL/*opt*/, NULL/*cond*/, NULL/*range*/,
-                      &bucket_state->buf, &bucket_state->size,
-                      NULL/*MD*/, NULL/*sysmd*/);
-    if (dplret != DPL_SUCCESS)
+    encstr = ret = malloc(strlen * 3 + 1);
+    if (ret == NULL)
+        return NULL;
+
+    for (i=0; i < strlen; ++i)
     {
-        PRINTERR("%s: Could not map bucket status file %s : %s\n",
-                 __FUNCTION__, bucket_state->filename, dpl_status_str(dplret));
-        goto err;
+        if(isalnum(str[i]) || str[i] == '-' || str[i] == '_' || str[i] == '.' || str[i] == '~')
+        {
+            *encstr = str[i];
+            encstr += 1;
+        }
+        else if (str[i] == ' ')
+        {
+            *encstr = '+';
+            encstr += 1;
+        }
+        else
+        {
+            encstr[0] = '%';
+            encstr[1] = hex[(str[i] >> 4) & 15];
+            encstr[2] = hex[ str[i]       & 15];
+            encstr += 3;
+        }
     }
-
-    ret = EXIT_SUCCESS;
-
-err:
-    // Restore original bucket.
-    ctx->src_ctx->cur_bucket = ctx_bucket;
-
-    bucket_state->next_entry_off = 0;
-
-    if (metadata != NULL)
-        dpl_dict_free(metadata);
+    *encstr = '\0';
 
     return ret;
 }
 
-
-/*
- * This function allocates and fills a string with the status filename
- * matching the bucket given as parameter.
- */
-char* cloudmig_get_status_filename_from_bucket(char* bucket)
+void
+delete_file(dpl_ctx_t *ctx, const char *what, char *path)
 {
-    int     len = 0;
-    char    *filename = NULL;
+    dpl_status_t    dplret;
 
-    len = strlen(bucket) + 10;
-    filename = malloc(len * sizeof(*filename));
-    if (filename == NULL)
+    cloudmig_log(DEBUG_LVL, "[Deleting %s File] Deleting file '%s'...\n",
+                 what, path);
+
+    dplret = dpl_unlink(ctx, path);
+    if (dplret != DPL_SUCCESS)
     {
-        PRINTERR("%s: Could not allocate memory"
-                 " for status filename for bucket '%s'.\n",
-                 __FUNCTION__, bucket);
-        return NULL;
+        PRINTERR("[Deleting %s File] Could not delete the file %s : %s.\n",
+                 what, path, dpl_status_str(dplret));
     }
-    strcpy(filename, bucket);
-    strcat(filename, ".cloudmig");
-    return filename;
+}
+
+void
+delete_directory(dpl_ctx_t *ctx, const char *what, char *path)
+{
+    dpl_status_t dplret;
+
+    cloudmig_log(DEBUG_LVL, "[Deleting %s Directory] Deleting '%s'...\n",
+                 what, path);
+
+    dplret = dpl_rmdir(ctx, path);
+    if (dplret != DPL_SUCCESS)
+    {
+        PRINTERR("[Deleting %s Directory] "
+                 "Could not delete the directory %s : %s.\n",
+                 what, path, dpl_status_str(dplret));
+    }
+}
+
+void
+delete_bucket(dpl_ctx_t *ctx, const char *what, char *path)
+{
+    dpl_status_t dplret;
+
+    cloudmig_log(DEBUG_LVL, "[Deleting %s Bucket] Deleting '%s'...\n",
+                 what, path);
+
+    dplret = dpl_delete_bucket(ctx, path);
+    if (dplret != DPL_SUCCESS)
+    {
+        PRINTERR("[Deleting %s Bucket] "
+                 "Could not delete the bucket %s : %s.\n",
+                 what, path, dpl_status_str(dplret));
+    }
 }

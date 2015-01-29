@@ -1,4 +1,4 @@
-// Copyright (c) 2011, David Pineau
+// Copyright (c) 2015, David Pineau
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -24,50 +24,36 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
+#ifndef __CLOUDMIG_STATUS_DIGEST_H__
+#define __CLOUDMIG_STATUS_DIGEST_H__
 
-#include <errno.h>
-#include <string.h>
-#include <unistd.h>
+struct cloudmig_ctx;
+struct cloudmig_status;
 
-#include <droplet.h>
-#include <droplet/vfs.h>
-
-#include "cloudmig.h"
-#include "status_store.h"
-#include "utils.h"
-
-void delete_source(struct cloudmig_ctx *ctx)
+enum digest_field
 {
-    int                         found = 1;
-    char                        *bucketpath = NULL;
-    char                        *statuspath = NULL;
-    struct file_transfer_state  filestate;
+    DIGEST_OBJECTS,
+    DIGEST_DONE_OBJECTS,
+    DIGEST_BYTES,
+    DIGEST_DONE_BYTES
+};
 
-    cloudmig_log(INFO_LVL,
-    "[Deleting Source]: Starting deletion of the migration's source...\n");
+struct status_digest*   status_digest_new(dpl_ctx_t *status_ctx,
+                                          const char *storepath,
+                                          uint64_t refresh_freqency);
+void                    status_digest_free(struct status_digest *digest);
 
-    status_store_reset_iteration(ctx);
-    while (found == 1)
-    {
-        found = status_store_next_entry(ctx, &filestate);
-        if (found < 0)
-        {
-            PRINTERR("[Deleting Source] Could not find next object entry to delete.\n");
-            goto cleanup;
-        }
-        if (found == 1)
-            delete_file(ctx->src_ctx, "Source", filestate.obj_path);
-        status_store_release_entry(&filestate);
-    }
+int                     status_digest_download(struct status_digest *digest,
+                                               int *regenerate);
+int                     status_digest_upload(struct status_digest *digest);
+void                    status_digest_delete(dpl_ctx_t *status_ctx,
+                                             struct status_digest *digest);
 
-    status_store_delete(ctx);
+uint64_t                status_digest_get(struct status_digest *digest,
+                                          enum digest_field);
+void                    status_digest_add(struct status_digest *digest,
+                                          enum digest_field,
+                                          uint64_t value);
 
-    cloudmig_log(INFO_LVL,
-    "[Deleting Source]: Deletion of the migration's source done.\n");
+#endif /* ! __CLOUDMIG_STATUS_DIGEST_H__ */
 
-cleanup:
-    if (bucketpath)
-        free(bucketpath);
-    if (statuspath)
-        free(statuspath);
-}

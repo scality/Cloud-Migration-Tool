@@ -48,6 +48,7 @@ struct cloudmig_options
     const char          *dest_profile;
     const char          *status_profile;
     char                *logfile;
+    int                 n_buckets;
     char                **src_buckets;
     char                **dst_buckets;
     char                *config;
@@ -63,6 +64,7 @@ struct cloudmig_options
     NULL,                   \
     NULL,                   \
     NULL,                   \
+    0,                      \
     NULL,                   \
     NULL,                   \
     NULL,                   \

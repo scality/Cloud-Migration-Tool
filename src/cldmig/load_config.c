@@ -175,11 +175,11 @@ config_update_json_buckets(struct cloudmig_options *options,
 
     n_buckets = json_object_object_length(buckets);
 
-    src_buckets = calloc(n_buckets+1, sizeof(*options->src_buckets));
-    dst_buckets = calloc(n_buckets+1, sizeof(*options->dst_buckets));
+    src_buckets = calloc(n_buckets, sizeof(*options->src_buckets));
+    dst_buckets = calloc(n_buckets, sizeof(*options->dst_buckets));
     if (src_buckets == NULL || dst_buckets == NULL)
     {
-        PRINTERR("Could not allocate buckets for configuration.");
+        PRINTERR("Could not allocate buckets for configuration.\n");
         ret = EXIT_FAILURE;
         goto err;
     }
@@ -188,7 +188,7 @@ config_update_json_buckets(struct cloudmig_options *options,
     {
         if (json_object_is_type(val, json_type_string) == FALSE)
         {
-            PRINTERR("Bucket \"%s\" 's target is not a json string", key);
+            PRINTERR("Bucket \"%s\" 's target is not a json string.\n", key);
             ret = EXIT_FAILURE;
             goto err;
         }
@@ -196,13 +196,14 @@ config_update_json_buckets(struct cloudmig_options *options,
         dst_buckets[i] = strdup(json_object_get_string(val));
         if (src_buckets[i] == NULL || dst_buckets[i] == NULL)
         {
-            PRINTERR("Could not allocate buckets for configuration.");
+            PRINTERR("Could not allocate buckets for configuration.\n");
             ret = EXIT_FAILURE;
             goto err;
         }
         ++i;
     }
 
+    options->n_buckets = n_buckets;
     options->src_buckets = src_buckets;
     options->dst_buckets = dst_buckets;
     src_buckets = NULL;
@@ -266,13 +267,13 @@ config_update_options(struct cldmig_config *conf,
         {
             if (!json_object_is_type(val, json_type_object))
             {
-                PRINTERR("Unexpected type %i for option 'cloudmig/buckets'",
+                PRINTERR("Unexpected type %i for option 'cloudmig/buckets'.\n",
                          json_object_get_type(val));
                 return EXIT_FAILURE;
             }
             if (options->src_buckets || options->dst_buckets)
             {
-                PRINTERR("Source and target buckets cannot be configured multiple times.");
+                PRINTERR("Source and target buckets cannot be configured multiple times.\n");
                 return EXIT_FAILURE;
             }
             if (config_update_json_buckets(options, val) != EXIT_SUCCESS)
@@ -282,7 +283,7 @@ config_update_options(struct cldmig_config *conf,
         {
             if (!json_object_is_type(val, json_type_boolean))
             {
-                PRINTERR("Unexpected type %i for option 'cloudmig/force-resume'",
+                PRINTERR("Unexpected type %i for option 'cloudmig/force-resume'.\n",
                          json_object_get_type(val));
                 return EXIT_FAILURE;
             }
@@ -294,7 +295,7 @@ config_update_options(struct cldmig_config *conf,
         {
             if (!json_object_is_type(val, json_type_boolean))
             {
-                PRINTERR("Unexpected type %i for option 'cloudmig/delete-source'",
+                PRINTERR("Unexpected type %i for option 'cloudmig/delete-source'.\n",
                          json_object_get_type(val));
                 return EXIT_FAILURE;
             }
@@ -306,7 +307,7 @@ config_update_options(struct cldmig_config *conf,
         {
             if (!json_object_is_type(val, json_type_boolean))
             {
-                PRINTERR("Unexpected type %i for option 'cloudmig/background'",
+                PRINTERR("Unexpected type %i for option 'cloudmig/background'.\n",
                          json_object_get_type(val));
                 return EXIT_FAILURE;
             }
@@ -318,7 +319,7 @@ config_update_options(struct cldmig_config *conf,
         {
             if (!json_object_is_type(val, json_type_string))
             {
-                PRINTERR("Unexpected type %i for option 'cloudmig/verbose'",
+                PRINTERR("Unexpected type %i for option 'cloudmig/verbose'.\n",
                          json_object_get_type(val));
                 return EXIT_FAILURE;
             }
@@ -329,7 +330,7 @@ config_update_options(struct cldmig_config *conf,
         {
             if (!json_object_is_type(val, json_type_string))
             {
-                PRINTERR("Unexpected type %i for option 'cloudmig/droplet-trace'",
+                PRINTERR("Unexpected type %i for option 'cloudmig/droplet-trace'.\n",
                          json_object_get_type(val));
                 return EXIT_FAILURE;
             }
@@ -340,7 +341,7 @@ config_update_options(struct cldmig_config *conf,
         {
             if (!json_object_is_type(val, json_type_string))
             {
-                PRINTERR("Unexpected type %i for option 'cloudmig/output'",
+                PRINTERR("Unexpected type %i for option 'cloudmig/output'.\n",
                          json_object_get_type(val));
                 return EXIT_FAILURE;
             }
@@ -350,7 +351,7 @@ config_update_options(struct cldmig_config *conf,
                 char *file = strdup(v);
                 if (file == NULL)
                 {
-                    PRINTERR("[Loading Config]: Could not set logfile %s\n",
+                    PRINTERR("[Loading Config]: Could not set logfile %s.\n",
                              strerror(errno));
                     return EXIT_FAILURE;
                 }
@@ -361,7 +362,7 @@ config_update_options(struct cldmig_config *conf,
         {
             if (!json_object_is_type(val, json_type_boolean))
             {
-                PRINTERR("Unexpected type %i for option 'cloudmig/create-directories'",
+                PRINTERR("Unexpected type %i for option 'cloudmig/create-directories'.\n",
                          json_object_get_type(val));
                 return EXIT_FAILURE;
             }
@@ -380,28 +381,28 @@ config_update_options(struct cldmig_config *conf,
         case json_type_boolean:
             if (fprintf(profile, "%s=%i\n", key, !!json_object_get_boolean(val)) <= 0)
             {
-                PRINTERR("Could not write entry from config into generated profile.");
+                PRINTERR("Could not write entry from config into generated profile.\n");
                 return EXIT_FAILURE;
             }
             break ;
         case json_type_double:
             if (fprintf(profile, "%s=%f\n", key, json_object_get_double(val)) <= 0)
             {
-                PRINTERR("Could not write entry from config into generated profile.");
+                PRINTERR("Could not write entry from config into generated profile.\n");
                 return EXIT_FAILURE;
             }
             break ;
         case json_type_int:
             if (fprintf(profile, "%s=%i\n", key, json_object_get_int(val)) <= 0)
             {
-                PRINTERR("Could not write entry from config into generated profile.");
+                PRINTERR("Could not write entry from config into generated profile.\n");
                 return EXIT_FAILURE;
             }
             break ;
         case json_type_string:
             if (fprintf(profile, "%s=%s\n", key, json_object_get_string(val)) <= 0)
             {
-                PRINTERR("Could not write entry from config into generated profile.");
+                PRINTERR("Could not write entry from config into generated profile.\n");
                 return EXIT_FAILURE;
             }
             break ;
@@ -409,13 +410,13 @@ config_update_options(struct cldmig_config *conf,
         case json_type_array:
         default:
             PRINTERR("[Loading Config]: Unexpected json element type"
-                     " for section's %s value: %i.", section,
+                     " for section's %s value: %i.\n", section,
                      json_object_get_type(val));
             return EXIT_FAILURE;
         }
-        if (fflush(profile) <= 0)
+        if (fflush(profile) < 0)
         {
-            PRINTERR("Could not fflush generated profile");
+            PRINTERR("Could not fflush generated profile: %s.\n", strerror(errno));
             return EXIT_FAILURE;
         }
         *countp += 1;

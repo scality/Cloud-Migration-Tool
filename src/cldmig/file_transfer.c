@@ -33,45 +33,151 @@
 #include "cloudmig.h"
 #include "options.h"
 
+#include "status_store.h"
+#include "status_digest.h"
 
 static int
 create_parent_dirs(struct cloudmig_ctx *ctx,
                    struct file_transfer_state *filestate)
 {
-    char    *nextdelim = filestate->dst.name;
+    char            *delim = NULL;
+    int             ret;
     dpl_status_t    dplret = DPL_SUCCESS;
+    dpl_dict_t      *md = NULL;
 
-    cloudmig_log(INFO_LVL,
-                 "[Migrating]: Creating parent directories of file %s.\n",
-                 filestate->src.name);
+    cloudmig_log(DEBUG_LVL, "[Migrating] Creating parent directory of file %s\n",
+                 filestate->obj_path);
 
-    while ((nextdelim = strchr(nextdelim, '/')) != NULL)
+    delim = strrchr(filestate->obj_path, '/');
+    if (delim == NULL)
     {
-        /*
-         * TODO FIXME Do it with right attributes
-         * FIXME : WORKAROUND : replace the current delimiter by a nul char
-         * Since the dpl_mkdir function seems to fail when the last char is a delim
-         */
-        *nextdelim = '\0';
-        cloudmig_log(INFO_LVL, "[Migrating]: Creating parent directory %s.\n",
-                     filestate->dst.name);
-        dplret = dpl_mkdir(ctx->dest_ctx, filestate->dst.name, NULL/*MD*/, NULL/*SYSMD*/);
-        *nextdelim = '/';
-        cloudmig_log(DEBUG_LVL,
-                     "[Migrating]: Parent directory creation status : %s.\n",
-                     dpl_status_str(dplret));
-        if (dplret != DPL_SUCCESS && (dplret != DPL_ENOENT || dplret != DPL_EEXIST))
-            goto err;
-        // Now bypass current delimiter.
-        nextdelim++;
+        ret = EXIT_SUCCESS;
+        goto end;
     }
-    cloudmig_log(INFO_LVL,
-                 "[Migrating]: Parent directories created with success !\n");
-    return EXIT_SUCCESS;
-err:
-    PRINTERR("[Migrating]: Could not create parent directories : %s\n",
-             dpl_status_str(dplret));
-    return EXIT_FAILURE;
+    // FIXME: Workaround: Replace current delimiter by a nul char since the
+    // dpl_mkdir function seems to fail when the last char is a delimiter.
+    cloudmig_log(WARN_LVL, "[Migrating] Creating parent directory of file %s\n",
+                 filestate->obj_path);
+    *delim = 0;
+    cloudmig_log(WARN_LVL, "[Migrating] Creating parent directory=%s\n",
+                 filestate->obj_path);
+
+    dplret = dpl_getattr(ctx->dest_ctx, filestate->obj_path, NULL /*mdp*/, NULL/*sysmd*/);
+    if (dplret != DPL_SUCCESS)
+    {
+        if (dplret != DPL_ENOENT)
+        {
+            ret = EXIT_FAILURE;
+            goto end;
+        }
+
+        // ENOENT, try to create parents then self.
+        ret = create_parent_dirs(ctx, filestate);
+        if (ret != EXIT_SUCCESS)
+            goto end;
+
+        dplret = dpl_getattr(ctx->src_ctx, filestate->obj_path, &md, NULL/*sysmd*/);
+        if (dplret != DPL_SUCCESS)
+        {
+            PRINTERR("[Migrating] Could not get source directory %s attributes: %s.\n",
+                     filestate->obj_path, dpl_status_str(dplret));
+            ret = EXIT_FAILURE;
+            goto end;
+        }
+
+        dplret = dpl_mkdir(ctx->dest_ctx, filestate->obj_path, md, NULL/*sysmd*/);
+        if (dplret != DPL_SUCCESS)
+        {
+            PRINTERR("[Migrating] Creating parent directory %s: %s\n",
+                     filestate->obj_path, dpl_status_str(dplret));
+            ret = EXIT_FAILURE;
+            goto end;
+        }
+
+        cloudmig_log(DEBUG_LVL,
+                     "[Migrating] Parent directories created with success !\n");
+    }
+
+    ret = EXIT_SUCCESS;
+
+end:
+    if (delim)
+        *delim = '/';
+    if (md)
+        dpl_dict_free(md);
+
+    return ret;
+}
+
+int
+create_directory(struct cloudmig_ctx *ctx,
+                 struct file_transfer_state *filestate)
+{
+    int             ret;
+    dpl_status_t    dplret;
+    int             pathlen = strlen(filestate->obj_path);
+    char            *delim = NULL;
+    dpl_dict_t      *md = NULL;
+
+
+    cloudmig_log(DEBUG_LVL, "[Migrating] Directory %s\n",
+                 filestate->obj_path);
+
+    if (ctx->options.flags & AUTO_CREATE_DIRS)
+    {
+        ret = create_parent_dirs(ctx, filestate);
+        if (ret != EXIT_SUCCESS)
+        {
+            PRINTERR("[Creating Directory] Could not create directory %s\n",
+                     filestate->obj_path);
+            ret = EXIT_FAILURE;
+            goto end;
+        }
+    }
+
+    /*
+     * FIXME
+     * Workaround of a behavior from VFS API: Cannot mkdir with paths ending by
+     * a delimiter, so we null the ending delimiter if any
+     */
+    if (pathlen > 1 && filestate->obj_path[pathlen - 1] == '/')
+    {
+        delim = &filestate->obj_path[pathlen];
+        while (delim > filestate->obj_path+1 && *(delim-1) == '/')
+            --delim;
+        *delim = 0;
+    }
+    else
+        delim = NULL;
+
+    dplret = dpl_getattr(ctx->src_ctx, filestate->obj_path, &md, NULL/*sysmd*/);
+    if (dplret != DPL_SUCCESS)
+    {
+        PRINTERR("[Migrating] Could not get source directory %s attributes: %s.\n",
+                 filestate->obj_path, dpl_status_str(dplret));
+        ret = EXIT_FAILURE;
+        goto end;
+    }
+
+    dplret = dpl_mkdir(ctx->dest_ctx, filestate->obj_path, md, NULL/*sysmd*/);
+    if (dplret != DPL_SUCCESS && dplret != DPL_EEXIST)
+    {
+        PRINTERR("[Creating Directory] "
+                 "Could not create directory %s : %s.\n",
+                 filestate->obj_path, dpl_status_str(dplret));
+        ret = EXIT_FAILURE;
+        goto end;
+    }
+
+    ret = EXIT_SUCCESS;
+
+end:
+    if (delim)
+        *delim = '/';
+    if (md)
+        dpl_dict_free(md);
+
+    return ret;
 }
 
 /*
@@ -81,11 +187,12 @@ err:
 static dpl_status_t
 transfer_data_chunk(struct cloudmig_ctx *ctx,
                     struct file_transfer_state *filestate,
-                    dpl_vfile_t *src, dpl_vfile_t *dst)
+                    dpl_vfile_t *src, dpl_vfile_t *dst,
+                    uint64_t *bytes_transferedp)
 {
     dpl_status_t            ret = DPL_FAILURE;
-    struct json_object      *src_status = NULL;
-    struct json_object      *dst_status = NULL;
+    struct json_object      *rstatus = NULL;
+    struct json_object      *wstatus = NULL;
     char                    *buffer = NULL;
     unsigned int            buflen = 0;
     // For ETA data
@@ -93,24 +200,24 @@ transfer_data_chunk(struct cloudmig_ctx *ctx,
     struct timeval          tv;
 
     cloudmig_log(DEBUG_LVL,
-                 "[Migrating]: %s : Transfering data chunk of %lu bytes.\n",
-                 filestate->src.name, ctx->options.block_size);
+                 "[Migrating] %s : Transfering data chunk of %lu bytes.\n",
+                 filestate->obj_path, ctx->options.block_size);
 
     ret = dpl_fstream_get(src, ctx->options.block_size,
-                          &buffer, &buflen, &src_status);
+                          &buffer, &buflen, &rstatus);
     if (ret != DPL_SUCCESS)
     {
-        PRINTERR("Could not get next block from source file %s: %s",
-                 filestate->src.name, dpl_status_str(ret));
+        PRINTERR("Could not get next block from source file %s : %s.\n",
+                 filestate->obj_path, dpl_status_str(ret));
         ret = DPL_FAILURE;
         goto end;
     }
 
-    ret = dpl_fstream_put(dst, buffer, buflen, &dst_status);
+    ret = dpl_fstream_put(dst, buffer, buflen, &wstatus);
     if (ret != DPL_SUCCESS)
     {
-        PRINTERR("Could not put next block to destination file %s: %s",
-                 filestate->dst.name, dpl_status_str(ret));
+        PRINTERR("Could not put next block to destination file %s : %s.\n",
+                 filestate->obj_path, dpl_status_str(ret));
         ret = DPL_FAILURE;
         goto end;
     }
@@ -128,29 +235,31 @@ transfer_data_chunk(struct cloudmig_ctx *ctx,
     else
         insert_in_list(&ctx->tinfos[0].infolist, e);
 
-    if (filestate->src.status)
-        json_object_put(filestate->src.status);
-    filestate->src.status = src_status;
-    src_status = NULL;
+    if (filestate->rstatus)
+        json_object_put(filestate->rstatus);
+    filestate->rstatus = rstatus;
+    rstatus = NULL;
 
-    if (filestate->dst.status)
-        json_object_put(filestate->dst.status);
-    filestate->dst.status = dst_status;
-    dst_status = NULL;
+    if (filestate->wstatus)
+        json_object_put(filestate->wstatus);
+    filestate->wstatus = wstatus;
+    wstatus = NULL;
 
     filestate->fixed.offset += buflen;
+
+    *bytes_transferedp = buflen;
 
     ret = DPL_SUCCESS;
 
 end:
     if (buffer)
         free(buffer);
-    if (src_status)
-        json_object_put(src_status);
-    if (dst_status)
-        json_object_put(dst_status);
+    if (rstatus)
+        json_object_put(rstatus);
+    if (wstatus)
+        json_object_put(wstatus);
 
-    return ret; /* dpl_write(data->hfile, buf, len); */
+    return ret;
 }
 
 int
@@ -162,55 +271,53 @@ transfer_chunked(struct cloudmig_ctx *ctx,
     dpl_vfile_t     *src = NULL;
     dpl_vfile_t     *dst = NULL;
 
+    cloudmig_log(WARN_LVL, "Transfer Chunked of file %s\n", filestate->obj_path);
     /*
      * Open the source file for reading
      */
-    dplret = dpl_open(ctx->src_ctx, filestate->src.name,
+    dplret = dpl_open(ctx->src_ctx, filestate->obj_path,
                       DPL_VFILE_FLAG_RDONLY|DPL_VFILE_FLAG_STREAM,
                       NULL /* opts */, NULL /* cond */,
                       NULL/* MD */, NULL /* sysmd */,
                       NULL /* query params */,
-                      filestate->src.status,
+                      filestate->rstatus,
                       &src);
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not open source file %s: %s\n",
-                 __FUNCTION__, filestate->src.name, dpl_status_str(dplret));
+                 __FUNCTION__, filestate->obj_path, dpl_status_str(dplret));
         goto err;
     }
 
     /*
      * Open the destination file for writing
      */
-    dplret = dpl_open(ctx->dest_ctx, filestate->dst.name,
+    dplret = dpl_open(ctx->dest_ctx, filestate->obj_path,
                       DPL_VFILE_FLAG_CREAT|DPL_VFILE_FLAG_WRONLY|DPL_VFILE_FLAG_STREAM,
                       NULL /* opts */, NULL /* cond */,
                       NULL /*MD*/, NULL/*SYSMD*/,
                       NULL /* query params */,
-                      filestate->dst.status,
+                      filestate->wstatus,
                       &dst);
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not open dest file %s: %s\n",
-                 __FUNCTION__, filestate->dst.name, dpl_status_str(dplret));
+                 __FUNCTION__, filestate->obj_path, dpl_status_str(dplret));
         goto err;
     }
 
     /* Transfer the actual data */
     while (filestate->fixed.offset < filestate->fixed.size)
     {
-        ret = transfer_data_chunk(ctx, filestate, src, dst);
+        uint64_t    bytes_transfered;
+
+        ret = transfer_data_chunk(ctx, filestate, src, dst, &bytes_transfered);
         if (ret != EXIT_SUCCESS)
             goto err;
 
-        /*
-         * XXX TODO FIXME TODO XXX
-         * Update bucket status
-         * XXX TODO FIXME TODO XXX
-        ret = transfer_state_save(ctx, filestate);
+        ret = status_store_entry_update(ctx, filestate, bytes_transfered);
         if (ret != EXIT_SUCCESS)
             goto err;
-         */
     }
 
     /*
@@ -220,7 +327,7 @@ transfer_chunked(struct cloudmig_ctx *ctx,
     if (DPL_SUCCESS != dplret)
     {
         PRINTERR("%s: Could not flush destination file %s: %s",
-                __FUNCTION__, filestate->dst.name, dpl_status_str(dplret));
+                __FUNCTION__, filestate->obj_path, dpl_status_str(dplret));
         goto err;
     }
 
@@ -233,7 +340,7 @@ err:
         if (dplret != DPL_SUCCESS)
         {
             PRINTERR("%s: Could not close destination file %s: %s\n",
-                     __FUNCTION__, filestate->dst.name,
+                     __FUNCTION__, filestate->obj_path,
                      dpl_status_str(dplret));
         }
     }
@@ -244,7 +351,7 @@ err:
         if (dplret != DPL_SUCCESS)
         {
             PRINTERR("%s: Could not close source file %s: %s\n",
-                     __FUNCTION__, filestate->src.name,
+                     __FUNCTION__, filestate->obj_path,
                      dpl_status_str(dplret));
         }
     }
@@ -252,6 +359,10 @@ err:
     return ret;
 }
 
+/*
+ * As this functions transfers a file whole, there is no need for intermediary
+ * status updates, as the migrate_obj() caller completes an object's transfer.
+ */
 int
 transfer_whole(struct cloudmig_ctx *ctx,
                struct file_transfer_state *filestate)
@@ -263,7 +374,7 @@ transfer_whole(struct cloudmig_ctx *ctx,
     dpl_dict_t      *metadata = NULL;
     dpl_sysmd_t     sysmd;
 
-    dplret = dpl_fget(ctx->src_ctx, filestate->src.name, NULL, NULL, NULL,
+    dplret = dpl_fget(ctx->src_ctx, filestate->obj_path, NULL, NULL, NULL,
                       &buffer, &buflen, &metadata, &sysmd);
     if (dplret != DPL_SUCCESS)
     {
@@ -271,7 +382,7 @@ transfer_whole(struct cloudmig_ctx *ctx,
         goto end;
     }
 
-    dplret = dpl_fput(ctx->dest_ctx, filestate->dst.name, NULL, NULL, NULL,
+    dplret = dpl_fput(ctx->dest_ctx, filestate->obj_path, NULL, NULL, NULL,
                       metadata, &sysmd, buffer, buflen);
     if (dplret != DPL_SUCCESS)
     {
@@ -279,11 +390,8 @@ transfer_whole(struct cloudmig_ctx *ctx,
         goto end;
     }
 
-    /*
-     * XXX TODO FIXME TODO XXX
-     * Update bucket status
-     * XXX TODO FIXME TODO XXX
-     */
+    status_digest_add(ctx->status->digest, DIGEST_DONE_BYTES, filestate->fixed.size);
+
 
     ret = EXIT_SUCCESS;
 
@@ -310,7 +418,7 @@ transfer_file(struct cloudmig_ctx* ctx,
 
     cloudmig_log(INFO_LVL,
     "[Migrating] : file '%s' is a regular file : starting transfer...\n",
-    filestate->src.name);
+    filestate->obj_path);
 
 
     if (ctx->tinfos[0].config_flags & AUTO_CREATE_DIRS)
@@ -323,61 +431,10 @@ transfer_file(struct cloudmig_ctx* ctx,
           transfer_chunked(ctx, filestate)
         : transfer_whole(ctx, filestate);
 
-    /* 
-     * Now update the transfered size in the general status
-     * We can only do this here since in a multi-threaded context, we would
-     * not be able to ensure the transfered size is rolled-back before a status
-     * update in case of failure
-     */
-    // TODO Lock general status
-    ctx->status.general.head.done_sz += filestate->fixed.size;
-    // TODO Unlock general status
-
     cloudmig_log(INFO_LVL, "[Migrating] File '%s' transfered successfully !\n",
-                 filestate->src.name);
+                 filestate->obj_path);
 
 err:
 
     return ret;
 }
-
-
-int
-create_directory(struct cloudmig_ctx* ctx,
-                 struct file_transfer_state* filestate)
-{ 
-    int             ret = EXIT_FAILURE;
-    dpl_status_t    dplret = DPL_SUCCESS;
-
-    cloudmig_log(INFO_LVL,
-"[Migrating] : file '%s' is a directory: creating dest dir...\n",
-             filestate->src.name);
-
-    /* 
-     * FIXME : WORKAROUND : replace the last delimiter by a nul char
-     * Since the dpl_mkdir function seems to fail when the last char is a delim
-     */
-    filestate->dst.name[strlen(filestate->dst.name) - 1] = 0;
-    dplret = dpl_mkdir(ctx->dest_ctx, filestate->dst.name, NULL/*MD*/, NULL/*SYSMD*/);
-    filestate->dst.name[strlen(filestate->dst.name)] = '/';
-    // TODO FIXME With correct attributes
-    if (dplret != DPL_SUCCESS)
-    {
-        PRINTERR("%s: Could not create destination dir '%s': %s\n",
-                 __FUNCTION__, filestate->dst.name, dpl_status_str(dplret));
-        goto end;
-    }
-
-    ret = EXIT_SUCCESS;
-
-    /* No general status size to update, since directories are empty files */
-
-    cloudmig_log(INFO_LVL,
-                 "[Migrating] : directory '%s' successfully created !\n",
-                 filestate->dst.name);
-
-end:
-
-    return ret;
-}
-

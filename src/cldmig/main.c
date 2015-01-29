@@ -32,6 +32,8 @@
 
 #include "cloudmig.h"
 #include "options.h"
+#include "status_store.h"
+#include "status_digest.h"
 
 
 enum cloudmig_loglevel  gl_loglevel = INFO_LVL;
@@ -121,7 +123,7 @@ int main(int argc, char* argv[])
             PRINTERR("Could not retrieve host from the source addrlist", 0);
             goto failure;
 	}
-        src_hostname = strdup(ret == DPL_ENOENT ? "local_posix" : addr->host);
+        src_hostname = strdup(ret == DPL_ENOENT || addr == NULL ? "local_posix" : addr->host);
         if (src_hostname == NULL)
         {
             PRINTERR("Could not retrieve host from the source addrlist: "
@@ -135,7 +137,7 @@ int main(int argc, char* argv[])
             PRINTERR("Could not retrieve host from the dest addrlist", 0);
             goto failure;
 	}
-        dst_hostname = strdup(ret == DPL_ENOENT ? "local_posix" : addr->host);
+        dst_hostname = strdup(ret == DPL_ENOENT || addr == NULL ? "local_posix" : addr->host);
         if (dst_hostname == NULL)
         {
             PRINTERR("Could not retrieve host from the dest addrlist: "
@@ -145,45 +147,48 @@ int main(int argc, char* argv[])
     }
     if (setup_var_pid_and_sock(src_hostname,
                                dst_hostname) == EXIT_FAILURE)
-        return (EXIT_FAILURE);
-
-    if (load_status(&ctx, src_hostname, dst_hostname) == EXIT_FAILURE)
         goto failure;
 
-    struct cloudmig_ctx ref = ctx;
+    ctx.status = status_store_new();
+    if (ctx.status == NULL)
+        goto failure;
+
+    if (status_store_load(&ctx, src_hostname, dst_hostname) == EXIT_FAILURE)
+        goto failure;
+
+    uint64_t done_objects = status_digest_get(ctx.status->digest, DIGEST_DONE_OBJECTS);
+    uint64_t done_bytes = status_digest_get(ctx.status->digest, DIGEST_DONE_BYTES);
 
     signal(SIGINT, &cloudmig_sighandler);
 
     if (migrate(&ctx) == EXIT_FAILURE)
         goto failure;
 
-
     // Migration ended : Now we can display a status for the migration session.
     difftime = time(NULL);
     difftime -= starttime;
 
-    ref.status.general.head.done_objects = ctx.status.general.head.done_objects
-        - ref.status.general.head.done_objects;
-    ref.status.general.head.done_sz = ctx.status.general.head.done_sz
-        - ref.status.general.head.done_sz;
+    done_objects = status_digest_get(ctx.status->digest, DIGEST_DONE_OBJECTS) - done_objects;
+    done_bytes = status_digest_get(ctx.status->digest, DIGEST_DONE_BYTES) - done_bytes;
+
     cloudmig_log(STATUS_LVL,
         "End of data migration. During this session :\n"
-        "\tTransfered %llu/%llu objects\n"
-        "\tTransfered %llu/%llu Bytes\n"
-        "\tAverage transfer speed : %llu Bytes/s\n"
-        "\tTransfer Duration : %ud%uh%um%us\n",
-        ref.status.general.head.done_objects,
-        ref.status.general.head.nb_objects,
-        ref.status.general.head.done_sz,
-        ref.status.general.head.total_sz,
-        difftime == 0 ? 0 : ref.status.general.head.done_sz / difftime,
+        "\tTransfered %llu objects, totaling %llu/%llu objects.\n"
+        "\tTransfered %llu Bytes, totaling %llu/%llu Bytes.\n"
+        "\tAverage transfer speed : %llu Bytes/s.\n"
+        "\tTransfer Duration : %ud%uh%um%us.\n",
+        done_objects,
+        status_digest_get(ctx.status->digest, DIGEST_DONE_OBJECTS),
+        status_digest_get(ctx.status->digest, DIGEST_OBJECTS),
+        done_bytes,
+        status_digest_get(ctx.status->digest, DIGEST_DONE_BYTES),
+        status_digest_get(ctx.status->digest, DIGEST_BYTES),
+        difftime == 0 ? 0 : done_bytes / difftime,
         difftime / (60 * 60 * 24),
         difftime / (60 * 60) % 24,
         difftime / 60 % 60,
         difftime % 60
     );
-
-	ret = EXIT_SUCCESS;
 
 failure:
     if (ctx.options.config)
@@ -204,5 +209,8 @@ failure:
 	free(src_hostname);
     if (dst_hostname)
 	free(dst_hostname);
-    return (ret);
+    if (ctx.status)
+        status_store_free(ctx.status);
+
+    return ret;
 }

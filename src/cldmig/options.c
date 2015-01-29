@@ -211,7 +211,6 @@ opt_buckets(struct cloudmig_options *options, const char *arg)
 {
     char    *src;
     char    *dst;
-    int     size = 0;
     char    *next_coma = optarg;
 
     if (options->src_buckets && options->dst_buckets)
@@ -238,20 +237,19 @@ opt_buckets(struct cloudmig_options *options, const char *arg)
             PRINTERR("The list of source/destination buckets is invalid.\n", 0);
             return (EXIT_FAILURE);
         }
-        // goto the first char of the dst bucket name
-        size += 1;
+        options->n_buckets += 1;
         // Realloc src tab and set additional src.
-        options->src_buckets = realloc(options->src_buckets,
-                                         sizeof(*options->src_buckets)
-                                          * (size + 1));
-        options->src_buckets[size - 1] = src;
-        options->src_buckets[size] = NULL;
+        options->src_buckets =
+            realloc(options->src_buckets,
+                    sizeof(*options->src_buckets) * options->n_buckets);
+        options->src_buckets[options->n_buckets - 1] = src;
+        options->src_buckets[options->n_buckets] = NULL;
         // Realloc dst tab and set additional dst.
         options->dst_buckets = realloc(options->dst_buckets,
                                          sizeof(*options->dst_buckets)
-                                          * (size + 1));
-        options->dst_buckets[size - 1] = dst;
-        options->dst_buckets[size] = NULL;
+                                          * (options->n_buckets + 1));
+        options->dst_buckets[options->n_buckets - 1] = dst;
+        options->dst_buckets[options->n_buckets] = NULL;
 
         arg = next_coma;
         if (arg)
@@ -287,8 +285,72 @@ opt_verbose(const char *arg)
     return EXIT_SUCCESS;
 }
 
+void usage()
+{
+    fprintf(stderr,
+            "Usage:\n"
+            "    cloudmig source-profile-name dest-profile-name [ status-profile-name ]\n"
+            "\n"
+            "Options can be intermingled with parameters and are as follow:\n"
+            "         [ --help | -h]\n"
+            "         [ --delete-source ]\n"
+            "         [ --background ]\n"
+            "         [ --create-directories ]\n"
+            "         [ --force-resume | -r ]\n"
+            "         [ --block-size bytesize | -B bytesize ]\n"
+            "         [ --src-profile path | -s path ]\n"
+            "         [ --dst-profile path | -d path ]\n"
+            "         [ --status-profile path | -S path ]\n"
+            "         [ --buckets buckets_to_migrate | -b buckets_to_migrate ]\n"
+            "         [ --config configfile_path | -c configfile_path ]\n"
+            "         [ --verbose debug|info|warn|status|error | -v debug|info|warn|status|error ]\n"
+            "         [ --droplet-trace nihsrcdfb | -t nihsrcdfb ]\n"
+            "         [ --output logfile_path | -o logfile_path ]\n"
+            "\n"
+            "Please note that similar options can be written multiple times, and only the\n"
+            "last one will be taken into account.\n"
+            "Similar options are:\n"
+            "         source-profile-name and --src-profile. One is the name of the profile\n"
+            "   in the droplet configuration path, the other is the path to the profile.\n"
+            "         dest-profile-name and --dst-profile. One is the name of the profile\n"
+            "   in the droplet configuration path, the other is the path to the profile.\n"
+            "         status-profile-name and --status-profile. One is the name of the\n"
+            "   profile in the droplet configuration path, the other is the path to the\n"
+            "   profile. This profile is optional, and by default the status will be stored\n"
+            "   in your home's .cloudmig directory.\n"
+            "\n"
+            "Please see manpage for more detailed information.\n"
+    );
+}
+
 // global var used with getopt
 extern char* optarg;
+static struct option    long_options[] = {
+//  {name, has_arg, flagptr, returned_val}
+    /* Behavior-related options         */
+    {"delete-source",       no_argument,        0,  0 },
+    {"background",          no_argument,        0,  0 },
+    {"create-directories",  no_argument,        0,  0 },
+    {"block-size",          required_argument,  0, 'B'},
+    /* Configuration-related options    */
+    {"src-profile",         required_argument,  0, 's'},
+    {"dst-profile",         required_argument,  0, 'd'},
+    {"status-profile",      required_argument,  0, 'S'},
+    {"buckets",             required_argument,  0, 'b'},
+    {"config",              required_argument,  0, 'c'},
+    /* Status-related options           */
+//      {"ignore-status",       no_argument,        0, 'i'},
+    {"force-resume",        no_argument,        0, 'r'},
+    /* Verbose/Log-related options      */
+    {"verbose",             required_argument,  0, 'v'},
+    {"droplet-trace",       required_argument,  0, 't'},
+    {"output",              required_argument,  0, 'o'},
+    /* Misc options */
+    {"help",                no_argument,        0, 'h'},
+    /* Last element                     */
+    {0,                     0,                  0,  0 }
+};
+
 /*
  *
  * Here we could have used the getopt_long format, but because it is
@@ -299,32 +361,9 @@ int retrieve_opts(struct cloudmig_options *options, int argc, char* argv[])
 {
     char                    cur_opt = 0;
     int                     option_index = 0;
-    static struct option    long_options[] = {
-//      {name, has_arg, flagptr, returned_val}
-        /* Behavior-related options         */
-        {"delete-source",       no_argument,        0,  0 },
-        {"background",          no_argument,        0,  0 },
-        {"create-directories",  no_argument,        0,  0 },
-        {"block-size",          required_argument,  0, 'B'},
-        /* Configuration-related options    */
-        {"src-profile",         required_argument,  0, 's'},
-        {"dst-profile",         required_argument,  0, 'd'},
-        {"status-profile",      required_argument,  0, 'S'},
-        {"buckets",             required_argument,  0, 'b'},
-        {"config",              required_argument,  0, 'c'},
-        /* Status-related options           */
-//      {"ignore-status",       no_argument,        0, 'i'},
-        {"force-resume",        no_argument,        0, 'r'},
-        /* Verbose/Log-related options      */
-        {"verbose",             required_argument,  0, 'v'},
-        {"droplet-trace",       required_argument,  0, 't'},
-        {"output",              required_argument,  0, 'o'},
-        /* Last element                     */
-        {0,                     0,                  0,  0 }
-    };
 
     while ((cur_opt = getopt_long(argc, argv,
-                                  "-B:s:d:S:b:c:r:v:t:o:",
+                                  "-h?B:s:d:S:b:c:rv:t:o:",
                                   long_options, &option_index)) != -1)
     {
         switch (cur_opt)
@@ -417,8 +456,10 @@ int retrieve_opts(struct cloudmig_options *options, int argc, char* argv[])
         case 'o':
             options->logfile = optarg;
             break ;
+        case 'h':
+        case '?':
         default:
-            // An error has already been printed by getopt...
+            usage();
             return EXIT_FAILURE;
         }
     }

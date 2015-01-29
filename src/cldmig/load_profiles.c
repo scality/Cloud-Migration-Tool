@@ -33,56 +33,109 @@
 
 int load_profiles(struct cloudmig_ctx* ctx)
 {
-    char* cpy = 0;
-    char* profile_dir = 0;
-    char* profile_name = 0;
+    int         ret;
+    char        *profile_dir = 0;
+    char        *profile_name = 0;
+    dpl_ctx_t   *src = NULL;
+    dpl_ctx_t   *dst = NULL;
+    dpl_ctx_t   *status = NULL;
+    char        *src_path = NULL;
+    char        *dst_path = NULL;
+    char        *status_path = NULL;
 
-    cloudmig_log(INFO_LVL, "[Loading Profiles]: Starting profiles loading...\n");
+    cloudmig_log(INFO_LVL, "[Loading Profiles]: Starting...\n");
 
-    /*
-     * First, load the source profile...
-     */
-    cpy = strdup(ctx->options.src_profile);
-    if (ctx->options.flags & SRC_PROFILE_NAME)
-        profile_name = cpy;
-    else
-    {
-        profile_name = basename(cpy);
-        char * dot = strrchr(profile_name, '.');
-        if (dot)
-            *dot = '\0';
-        profile_dir = dirname(cpy);
-    }
-    if ((ctx->src_ctx = dpl_ctx_new(profile_dir, profile_name)) == NULL)
-    {
-        PRINTERR("Could not load source profile : %s/%s\n",
-                 profile_dir, profile_name, strerror(errno));
-        return (EXIT_FAILURE);
-    }
-    free(cpy);
-
-
-    cpy = strdup(ctx->options.dest_profile);
     profile_dir = 0;
-    if (ctx->options.flags & DEST_PROFILE_NAME)
-        profile_name = cpy;
+    src_path = strdup(ctx->options.src_profile);
+    if (src_path == NULL)
+    {
+        PRINTERR("[Loading profiles]: Could not allocate memory.");
+        ret = EXIT_FAILURE;
+        goto err;
+    }
+    if (ctx->options.flags & SRC_PROFILE_NAME)
+        profile_name = src_path;
     else
     {
-        profile_name = basename(cpy);
+        profile_name = basename(src_path);
         char * dot = strrchr(profile_name, '.');
         if (dot)
             *dot = '\0';
-        profile_dir = dirname(cpy);
+        profile_dir = dirname(src_path);
     }
-    if ((ctx->dest_ctx = dpl_ctx_new(profile_dir, profile_name)) == NULL)
+    src = dpl_ctx_new(profile_dir, profile_name);
+    if (src == NULL)
     {
-        dpl_ctx_free(ctx->src_ctx);
-        PRINTERR("Could not load destination profile : %s/%s\n",
+        PRINTERR("[Loading Profiles]: Could not load Source: %s/%s\n",
                  profile_dir, profile_name);
-        return (EXIT_FAILURE);
+        ret = EXIT_FAILURE;
+        goto err;
     }
-    free(cpy);
 
+
+    profile_dir = 0;
+    dst_path = strdup(ctx->options.dest_profile);
+    if (dst_path == NULL)
+    {
+        PRINTERR("[Loading profiles]: Could not allocate memory.");
+        ret = EXIT_FAILURE;
+        goto err;
+    }
+    if (ctx->options.flags & DEST_PROFILE_NAME)
+        profile_name = dst_path;
+    else
+    {
+        profile_name = basename(dst_path);
+        char * dot = strrchr(profile_name, '.');
+        if (dot)
+            *dot = '\0';
+        profile_dir = dirname(dst_path);
+    }
+    dst = dpl_ctx_new(profile_dir, profile_name);
+    if (dst == NULL)
+    {
+        PRINTERR("[Loading Profiles]: Could not load Destination: %s/%s\n",
+                 profile_dir, profile_name);
+        ret = EXIT_FAILURE;
+        goto err;
+    }
+
+
+    profile_dir = 0;
+    status_path = strdup(ctx->options.status_profile);
+    if (status_path == NULL)
+    {
+        PRINTERR("[Loading profiles]: Could not allocate memory.");
+        ret = EXIT_FAILURE;
+        goto err;
+    }
+    if (ctx->options.flags & STATUS_PROFILE_NAME)
+        profile_name = status_path;
+    else
+    {
+        profile_name = basename(status_path);
+        char * dot = strrchr(profile_name, '.');
+        if (dot)
+            *dot = '\0';
+        profile_dir = dirname(status_path);
+    }
+    status = dpl_ctx_new(profile_dir, profile_name);
+    if (status == NULL)
+    {
+        PRINTERR("[Loading Profiles]: Could not load Status: %s/%s\n",
+                 profile_dir, profile_name);
+        ret = EXIT_FAILURE;
+        goto err;
+    }
+
+
+    cloudmig_log(INFO_LVL, "[Loading Profiles]: Profiles loaded with success.\n");
+
+    /* Validate by 'consuming' the droplet contexts*/
+    ctx->src_ctx = src;
+    ctx->dest_ctx = dst;
+    ctx->status_ctx = status;
+    src = dst = status = NULL;
 
     /*
      * If the debug option was given, let's activate every droplet traces.
@@ -93,10 +146,25 @@ int load_profiles(struct cloudmig_ctx* ctx)
                      "[Loading Profiles]: Activating droplet libary traces.\n");
         ctx->src_ctx->trace_level = ctx->options.trace_flags;
         ctx->dest_ctx->trace_level = ctx->options.trace_flags;
+        ctx->status_ctx->trace_level = ctx->options.trace_flags;
     }
 
-    cloudmig_log(INFO_LVL,
-    "[Loading Profiles]: Profiles loaded with success.\n");
+    ret = EXIT_SUCCESS;
 
-    return (EXIT_SUCCESS);
+err:
+    if (src_path)
+        free(src_path);
+    if (dst_path)
+        free(dst_path);
+    if (status_path)
+        free(status_path);
+
+    if (src)
+        dpl_ctx_free(src);
+    if (dst)
+        dpl_ctx_free(dst);
+    if (status)
+        dpl_ctx_free(status);
+
+    return ret;
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2011, David Pineau
+// Copyright (c) 2015, David Pineau
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -24,50 +24,39 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
+#ifndef __CLOUDMIG_STATUS_STORE_H__
+#define __CLOUDMIG_STATUS_STORE_H__
 
-#include <errno.h>
-#include <string.h>
-#include <unistd.h>
+struct cloudmig_ctx;
 
-#include <droplet.h>
-#include <droplet/vfs.h>
+struct cloudmig_status* status_store_new();
+void                    status_store_free(struct cloudmig_status *status);
+void                    status_store_delete(struct cloudmig_ctx *ctx);
 
-#include "cloudmig.h"
-#include "status_store.h"
-#include "utils.h"
+int status_store_load(struct cloudmig_ctx* ctx, char *src_host, char *dst_host);
 
-void delete_source(struct cloudmig_ctx *ctx)
-{
-    int                         found = 1;
-    char                        *bucketpath = NULL;
-    char                        *statuspath = NULL;
-    struct file_transfer_state  filestate;
+void status_store_reset_iteration(struct cloudmig_ctx *ctx);
 
-    cloudmig_log(INFO_LVL,
-    "[Deleting Source]: Starting deletion of the migration's source...\n");
+/**
+ *
+ * @return  1 - SUCCESS - Entry found
+ *          0 - SUCCESS - No entry found (reached the end of the status'associated files)
+ *         -1 - FAILURE - an error occurred, see log
+ */
+int     status_store_next_incomplete_entry(struct cloudmig_ctx *ctx,
+                                           struct file_transfer_state *filestate);
+int     status_store_next_entry(struct cloudmig_ctx *ctx, struct file_transfer_state *filestate);
+void    status_store_release_entry(struct file_transfer_state *filestate);
 
-    status_store_reset_iteration(ctx);
-    while (found == 1)
-    {
-        found = status_store_next_entry(ctx, &filestate);
-        if (found < 0)
-        {
-            PRINTERR("[Deleting Source] Could not find next object entry to delete.\n");
-            goto cleanup;
-        }
-        if (found == 1)
-            delete_file(ctx->src_ctx, "Source", filestate.obj_path);
-        status_store_release_entry(&filestate);
-    }
 
-    status_store_delete(ctx);
 
-    cloudmig_log(INFO_LVL,
-    "[Deleting Source]: Deletion of the migration's source done.\n");
+/*
+ * Functions to update an entry's status
+ */
+int     status_store_entry_update(struct cloudmig_ctx *ctx,
+                                  struct file_transfer_state *filestate,
+                                  uint64_t done_size);
+int     status_store_entry_complete(struct cloudmig_ctx *ctx,
+                                    struct file_transfer_state *filestate);
 
-cleanup:
-    if (bucketpath)
-        free(bucketpath);
-    if (statuspath)
-        free(statuspath);
-}
+#endif /* ! __CLOUDMIG_STATUS_STORE_H__ */

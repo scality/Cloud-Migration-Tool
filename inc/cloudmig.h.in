@@ -71,8 +71,7 @@ struct cldmig_info
     int                     config_flags;
     uint32_t                fsize;
     uint32_t                fdone;
-    uint32_t                fnamlen;
-    char                    *fname;
+    char                    *fpath;
     struct cldmig_transf    *infolist;      // This list is used to compute the transfer rate
 };
 
@@ -86,11 +85,12 @@ struct cloudmig_ctx
 
     dpl_ctx_t               *src_ctx;
     dpl_ctx_t               *dest_ctx;
+    dpl_ctx_t               *status_ctx;
     int                     viewer_fd;
-    struct cloudmig_status  status;
+    struct cloudmig_status  *status;
     struct cldmig_info      *tinfos;
 };
-#define CTX_INITIALIZER { CONF_INITIALIZER, OPTIONS_INITIALIZER, NULL, NULL, -1, STATUS_INITIALIZER, NULL }
+#define CTX_INITIALIZER { CONF_INITIALIZER, OPTIONS_INITIALIZER, NULL, NULL, NULL, -1, NULL, NULL }
 
 /*
  * Required prototypes
@@ -99,7 +99,7 @@ int     retrieve_opts(struct cloudmig_options *, int argc, char *argv[]);
 int     load_config(struct cldmig_config *conf, struct cloudmig_options *);
 int     setup_var_pid_and_sock(char *src, char *dst);
 int     load_profiles(struct cloudmig_ctx *ctx);
-int     load_status(struct cloudmig_ctx *ctx, char *src_host, char *dst_host);
+int     status_store_load(struct cloudmig_ctx *ctx, char *src_host, char *dst_host);
 int     status_next_incomplete_entry(struct cloudmig_ctx *ctx,
                                      struct file_transfer_state *filestate);
 int		status_update_entry(struct cloudmig_ctx *ctx,
@@ -130,8 +130,6 @@ int     status_retrieve_states(struct cloudmig_ctx* ctx);
 /*
  * Utils used in different source files
  */
-int     cloudmig_map_bucket_state(struct cloudmig_ctx* ctx,
-                                  struct bucket_status* bst);
 char*   cloudmig_get_status_filename_from_bucket(char *bucket);
 
 

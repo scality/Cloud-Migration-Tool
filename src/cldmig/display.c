@@ -41,6 +41,9 @@
 #include "options.h"
 #include "cloudmig.h"
 
+#include "status_digest.h"
+#include "status_store.h"
+
 
 static int  unique_accept_sock = -1;
 static char *unique_sockfile = NULL;
@@ -218,9 +221,9 @@ retry:
 void
 cloudmig_update_client(struct cloudmig_ctx *ctx)
 {
-    static struct timeval lastupdate = {0, 0};
-    struct timeval tlimit = {0, 0};
-    char head;
+    static struct timeval       lastupdate = {0, 0};
+    struct timeval              tlimit = {0, 0};
+    char                        head;
 
     // No use doing anything if there's no fd for it...
     if (ctx->viewer_fd == -1)
@@ -231,7 +234,8 @@ cloudmig_update_client(struct cloudmig_ctx *ctx)
     //  - transfer fully done
     //  OR
     //  - last update was more than 1/4 sec ago
-    if (ctx->status.general.head.done_sz != ctx->status.general.head.total_sz
+    if (status_digest_get(ctx->status->digest, DIGEST_DONE_BYTES)
+            != status_digest_get(ctx->status->digest, DIGEST_BYTES)
         && (((double)tlimit.tv_sec * 1000.
              + (double)tlimit.tv_usec/1000.)
             - ((double)lastupdate.tv_sec * 1000.
@@ -248,8 +252,9 @@ cloudmig_update_client(struct cloudmig_ctx *ctx)
         goto unset_viewer_fd;
 
     // Then write the associated data
-    if (send(ctx->viewer_fd, &ctx->status.general.head,
-              sizeof(ctx->status.general.head), MSG_NOSIGNAL) == -1)
+    // (unix socket, so don't care about endianness)
+    if (send(ctx->viewer_fd, ctx->status->digest,
+              sizeof(*ctx->status->digest), MSG_NOSIGNAL) == -1)
         goto unset_viewer_fd;
 
     /*
@@ -276,7 +281,7 @@ cloudmig_update_client(struct cloudmig_ctx *ctx)
             make_list_transfer_rate(
                 (struct cldmig_transf*)(ctx->tinfos[threadid].infolist)
             ),
-            strlen(ctx->tinfos[threadid].fname) + 1
+            strlen(ctx->tinfos[threadid].fpath) + 1
         };
 
         // Write the struct
@@ -287,7 +292,7 @@ cloudmig_update_client(struct cloudmig_ctx *ctx)
             goto unset_viewer_fd;
         // Write the filename
         if (send(ctx->viewer_fd,
-              ctx->tinfos[threadid].fname,
+              ctx->tinfos[threadid].fpath,
               tinfo.namlen, MSG_NOSIGNAL) == -1)
             goto unset_viewer_fd;
         // We're done with this thread !

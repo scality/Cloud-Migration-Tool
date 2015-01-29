@@ -46,37 +46,27 @@
 *                                                                       *
 \***********************************************************************/
 
-// Unused yet (ie: not written to status file)
-struct cldmig_state_header
-{
-    uint64_t    total_sz; // Can count up to ULLONG_MAX bytes.
-    uint64_t    done_sz;
-    uint64_t    nb_objects;
-    uint64_t    done_objects;
-};
-#define STATE_HEAD_INITIALIZER {0, 0, 0, 0}
+struct dpl_ctx;
 
-struct cldmig_state_entry
+struct status_digest
 {
-    int32_t     file;
-    int32_t     bucket;
-};
+    struct {
+        uint64_t        bytes;
+        uint64_t        done_bytes;
+        uint64_t        objects;
+        uint64_t        done_objects;
+    }               fixed;
 
-struct cldmig_entry
-{
-    struct cldmig_state_entry   namlens;
-    char                        *filename;
-    char                        *bucket;
-    struct cldmig_entry         *next;
-};
+    struct dpl_ctx  *status_ctx;
 
-struct cldmig_status
-{
-    struct cldmig_state_header  head;
-    size_t                      size;
-    char                        *buf;
+    char            *path;
+
+    pthread_mutex_t lock;
+    int             lock_inited;
+
+    int             refresh_frequency;
+    int             refresh_count;
 };
-#define GENERAL_STATUS_INITIALIZER { STATE_HEAD_INITIALIZER, 0, NULL }
 
 /***********************************************************************\
 *                                                                       *
@@ -88,7 +78,6 @@ struct cldmig_status
  */
 struct file_state_entry
 {
-    int32_t     namlen;     // calculated with ROUND_NAMLEN
     uint64_t    size;       // size of the file
     uint64_t    offset;     // offset/quantity already copied
     /*
@@ -103,28 +92,27 @@ struct file_state_entry
  */
 struct file_transfer_state
 {
-    struct file_state_entry fixed;  // fixed
-    struct {
-        char                    *name;
-        struct json_object      *status;
-    }                       src;
-    struct {
-        char                    *name;
-        struct json_object      *status;
-    }                       dst;
+    struct bucket_status    *bst;
+
+    struct file_state_entry fixed;
+    struct json_object      *rstatus;   // Read status (from source)
+    struct json_object      *wstatus;   // Write status (to dest)
 
     // Data allowing to retrieve easily where does this entry come from
+    char                    *obj_path;
+    char                    *status_path;
     int                     state_idx;
-    unsigned int            offset;
 };
 
-#define CLOUDMIG_FILESTATE_INITIALIZER \
-    {                                  \
-        { 0, 0, 0 },                   \
-        { NULL, NULL },                \
-        { NULL, NULL },                \
-        0,                             \
-        0                              \
+#define CLOUDMIG_FILESTATE_INITIALIZER  \
+    {                                   \
+        NULL,                           \
+        { 0, 0 },                       \
+        NULL,                           \
+        NULL,                           \
+        NULL,                           \
+        NULL,                           \
+        0                               \
     }
 
 
@@ -140,12 +128,12 @@ struct file_transfer_state
  */
 struct bucket_status
 {
-    char                        *filename;      // name of the status file
-    char                        *dest_bucket;   // name of the destination bckt
-    unsigned int                refcount;
-    unsigned int                size;           // size of the status file
-    char                        *buf;           // file's content.
-    unsigned int                next_entry_off; // index on the next entry
+    pthread_mutex_t             lock;
+    int                         lock_inited;
+    struct json_object          *json;          // File's Json representation
+    char                        *path;          // path to the bucket status file
+    unsigned int                refcount;       // Nb of refs currently held to it or its data
+    unsigned int                next_entry;     // index to the next entry
 };
 
 /*
@@ -153,13 +141,18 @@ struct bucket_status
  */
 struct cloudmig_status
 {
-    struct cldmig_status    general;            // general cloudmig status
-    char                    *bucket_name;       // name of the status bucket
+    pthread_mutex_t         lock;
+    int                     lock_inited;
+
+    char                    *store_path;        // path of the status store (bucket or directory)
+    int                     path_is_bucket;
+
+    struct status_digest    *digest;            // general cloudmig status
+    struct bucket_status    **buckets;          // ptr on the table of states
     int                     n_buckets;          // number of bucket states
-    int                     cur_state;          // index of the current state
-    struct bucket_status    *buckets;           // ptr on the table of states
+    int                     cur_bucket;          // index of the current state
+    int                     n_loaded;
 };
-#define STATUS_INITIALIZER { GENERAL_STATUS_INITIALIZER, NULL, 0, 0, NULL }
 
 
 #endif /* ! __TRANSFER_STATE_H__ */

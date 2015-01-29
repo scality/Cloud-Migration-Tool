@@ -31,7 +31,9 @@ INCLUDE_DIRECTORIES(${DROPLET_INCLUDE_DIR}
 
 SET(CLOUDMIG_SRC    main.c
 
-                    create_status.c
+                    status_store.c
+                    status_digest.c
+                    status_bucket.c
                     delete_files.c
                     display.c
                     file_acl.c
@@ -40,8 +42,6 @@ SET(CLOUDMIG_SRC    main.c
                     load_profiles.c
                     log.c
                     options.c
-                    retrieve_status.c
-                    status.c
                     transfer.c
                     transfer_info.c
                     utils.c
