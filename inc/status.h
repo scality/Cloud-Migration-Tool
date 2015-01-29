@@ -27,6 +27,7 @@
 #ifndef __TRANSFER_STATE_H__
 #define __TRANSFER_STATE_H__
 
+#include <pthread.h>
 
 /*
  * This macro rounds a number to superior 4

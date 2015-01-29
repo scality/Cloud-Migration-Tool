@@ -60,7 +60,7 @@ create_tmp_profiles(char *srcpath, size_t srcsize,
     if (src == NULL)
     {
         PRINTERR("[Loading Config]: Could not create temporary droplet"
-                 " source profile: %s\n", strerror(errno));
+                 " source profile: %s.\n", strerror(errno));
         ret = EXIT_FAILURE;
         goto err;
     }
@@ -69,7 +69,7 @@ create_tmp_profiles(char *srcpath, size_t srcsize,
     if (dst == NULL)
     {
         PRINTERR("[Loading Config]: Could not create temporary droplet"
-                 " destination profile: %s\n", strerror(errno));
+                 " destination profile: %s.\n", strerror(errno));
         ret = EXIT_FAILURE;
         goto err;
     }
@@ -78,7 +78,7 @@ create_tmp_profiles(char *srcpath, size_t srcsize,
     if (status == NULL)
     {
         PRINTERR("[Loading Config]: Could not create temporary droplet"
-                 " status profile: %s\n", strerror(errno));
+                 " status profile: %s.\n", strerror(errno));
         ret = EXIT_FAILURE;
         goto err;
     }
@@ -157,7 +157,7 @@ unmap_config_file(int *fdp, void *addr, size_t size)
 {
     if (munmap(addr, size) == -1)
         cloudmig_log(WARN_LVL,
-                     "[Loaded Config]: Could not munmap config : %s\n",
+                     "[Loaded Config]: Could not munmap config : %s.\n",
                      strerror(errno));
     close(*fdp);
     *fdp = -1;
@@ -369,6 +369,11 @@ config_update_options(struct cldmig_config *conf,
             options->flags &= ~AUTO_CREATE_DIRS;
             if (json_object_get_boolean(val) == TRUE)
                 options->flags |= AUTO_CREATE_DIRS;
+        }
+        else if (strcasecmp(key, "block-size") == 0)
+        {
+            if (options->block_size == 0)
+                options->block_size = strtoul(json_object_get_string(val), NULL, 10);
         }
     }
     else

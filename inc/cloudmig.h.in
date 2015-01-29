@@ -51,6 +51,12 @@
 #include "display_protocol.h"
 #include "options.h"
 
+/*
+ * Default config values
+ */
+#define CLOUDMIG_DEFAULT_BLOCK_SIZE     (256*1024*1024) // 256MiB
+
+
 // Used for config retrieval.
 struct cldmig_config
 {

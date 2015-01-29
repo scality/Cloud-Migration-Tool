@@ -120,6 +120,10 @@ cloudmig_options_check(struct cloudmig_options *options)
         PRINTERR("No status storage could be setup for the migration.\n");
         return EXIT_FAILURE;
     }
+
+    if (options->block_size == 0)
+        options->block_size = CLOUDMIG_DEFAULT_BLOCK_SIZE;
+
     return EXIT_SUCCESS;
 }
 
