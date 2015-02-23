@@ -29,6 +29,7 @@
 #include <sys/time.h>
 #include <droplet.h>
 #include <droplet/vfs.h>
+#include <libgen.h>
 
 #include "cloudmig.h"
 #include "options.h"
@@ -162,7 +163,7 @@ create_directory(struct cloudmig_ctx *ctx,
     dplret = dpl_mkdir(ctx->dest_ctx, filestate->obj_path, md, NULL/*sysmd*/);
     if (dplret != DPL_SUCCESS && dplret != DPL_EEXIST)
     {
-        PRINTERR("[Creating Directory] "
+        PRINTERR("[Migrating] "
                  "Could not create directory %s : %s.\n",
                  filestate->obj_path, dpl_status_str(dplret));
         ret = EXIT_FAILURE;
@@ -176,6 +177,119 @@ end:
         *delim = '/';
     if (md)
         dpl_dict_free(md);
+
+    return ret;
+}
+
+int
+create_symlink(struct cloudmig_ctx *ctx,
+               struct file_transfer_state *filestate)
+{
+    int             ret;
+    dpl_status_t    dplret;
+    char            *link_target = NULL;
+    char            *tmppath = NULL;
+    char            *link_dir = NULL;
+    char            *dstroot = NULL;
+    char            *buckend = NULL;
+    int             bucklen = 0;
+
+    cloudmig_log(DEBUG_LVL, "[Migrating] Creating symlink %s\n",
+                 filestate->obj_path);
+
+    tmppath = strdup(filestate->obj_path);
+    if (tmppath == NULL)
+    {
+        PRINTERR("[Migrating] "
+                 "Could not dup the filepath. Out Of Memory.\n");
+        ret = EXIT_FAILURE;
+        goto end;
+    }
+
+    link_dir = dirname(tmppath);
+    buckend = strchr(filestate->obj_path, ':');
+    bucklen = 0;
+    if (buckend)
+        bucklen = (int)(intptr_t)(buckend - filestate->obj_path);
+    dstroot = calloc(bucklen + 3 /* for the ending ":/" */, sizeof(*dstroot));
+    if (dstroot == NULL)
+    {
+        PRINTERR("[Migrating] "
+                 "Could not dup the filepath. Out Of Memory.\n");
+        ret = EXIT_FAILURE;
+        goto end;
+    }
+
+    ret = sprintf(dstroot, "%.*s:/", bucklen ? bucklen : 0, filestate->obj_path);
+    if (ret < bucklen + 2)
+    {
+        PRINTERR("[Migrating] Could not compute the root path\n");
+        ret = EXIT_FAILURE;
+        goto end;
+    }
+    
+    /*
+     * We need to:
+     *
+     * Read source link
+     *
+     * chdir to link parent dir
+     * Create dest link
+     * chdir back to "root" dir
+     */
+    dplret = dpl_readlink(ctx->src_ctx, filestate->obj_path, &link_target);
+    if (dplret != DPL_SUCCESS)
+    {
+        PRINTERR("[Migrating] "
+                 "Could not read target of symlink %s : %s.\n",
+                 filestate->obj_path, dpl_status_str(dplret));
+        ret = EXIT_FAILURE;
+        goto end;
+    }
+    cloudmig_log(ERR_LVL, "[Migrating] Symlink -> %s -> %s\n", filestate->obj_path, link_target);
+
+    dplret = dpl_chdir(ctx->dest_ctx, link_dir);
+    if (dplret != DPL_SUCCESS)
+    {
+        PRINTERR("[Migrating] "
+                 "Could not chdir to %s : %s.\n",
+                 link_dir, dpl_status_str(dplret));
+        ret = EXIT_FAILURE;
+        goto end;
+    }
+
+    dplret = dpl_symlink(ctx->dest_ctx, link_target, filestate->obj_path);
+    if (dplret != DPL_SUCCESS)
+    {
+        PRINTERR("[Migrating] "
+                 "Could not create symlink %s to file %s : %s\n",
+                 filestate->obj_path, link_target, dpl_status_str(dplret));
+        ret = EXIT_FAILURE;
+        goto end;
+    }
+
+    dplret = dpl_chdir(ctx->dest_ctx, dstroot);
+    if (dplret != DPL_SUCCESS)
+    {
+        PRINTERR("[Migrating] "
+                 "Could not chdir to %s : %s.\n",
+                 link_dir, dpl_status_str(dplret));
+        ret = EXIT_FAILURE;
+        goto end;
+    }
+
+
+    status_digest_add(ctx->status->digest, DIGEST_DONE_BYTES, filestate->fixed.size);
+
+    ret = EXIT_SUCCESS;
+
+end:
+    if (link_target)
+        free(link_target);
+    if (tmppath)
+        free(tmppath);
+    if (dstroot)
+        free(dstroot);
 
     return ret;
 }

@@ -86,6 +86,8 @@ migrate_object(struct cloudmig_ctx* ctx,
     case DPL_FTYPE_DIR:
         migfunc = &create_directory;
         break ;
+    case DPL_FTYPE_SYMLINK:
+        migfunc = &create_symlink;
         break ;
     case DPL_FTYPE_REG:
     default:

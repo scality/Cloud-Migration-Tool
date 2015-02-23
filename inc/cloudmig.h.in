@@ -120,6 +120,8 @@ int     transfer_file(struct cloudmig_ctx *ctx,
                       struct file_transfer_state *filestate);
 int     create_directory(struct cloudmig_ctx *ctx,
                          struct file_transfer_state *filestate);
+int     create_symlink(struct cloudmig_ctx *ctx,
+                       struct file_transfer_state *filestate);
 
 dpl_canned_acl_t    get_file_canned_acl(dpl_ctx_t* ctx, char *filename);
 
