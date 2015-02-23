@@ -842,6 +842,13 @@ _bucket_recurse(dpl_ctx_t *src_ctx,
 
         if (strcmp(dirent.name, ".") && strcmp(dirent.name, ".."))
         {
+            ret = _bucket_add_entry(bst, curpath, dirent.size, dirent.type);
+            if (ret != EXIT_SUCCESS)
+            {
+                ret = EXIT_FAILURE;
+                goto end;
+            }
+
             if (DPL_FTYPE_DIR == dirent.type)
             {
                 dplret = _bucket_recurse(src_ctx, bst, curpath, &added_count, &added_size);
@@ -851,7 +858,7 @@ _bucket_recurse(dpl_ctx_t *src_ctx,
                     goto end;
                 }
             }
-            ret = _bucket_add_entry(bst, curpath, dirent.size, dirent.type);
+
             added_count += 1;
             added_size += dirent.size;
         }
