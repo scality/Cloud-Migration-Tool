@@ -111,14 +111,15 @@ end:
 }
 
 int
-create_directory(struct cloudmig_ctx *ctx,
+create_directory(struct cldmig_info *tinfo,
                  struct file_transfer_state *filestate)
 {
-    int             ret;
-    dpl_status_t    dplret;
-    int             pathlen = strlen(filestate->obj_path);
-    char            *delim = NULL;
-    dpl_dict_t      *md = NULL;
+    int                     ret;
+    dpl_status_t            dplret;
+    struct cloudmig_ctx     *ctx = tinfo->ctx;
+    int                     pathlen = strlen(filestate->obj_path);
+    char                    *delim = NULL;
+    dpl_dict_t              *md = NULL;
 
 
     cloudmig_log(DEBUG_LVL, "[Migrating] Directory %s\n",
@@ -182,17 +183,18 @@ end:
 }
 
 int
-create_symlink(struct cloudmig_ctx *ctx,
+create_symlink(struct cldmig_info *tinfo,
                struct file_transfer_state *filestate)
 {
-    int             ret;
-    dpl_status_t    dplret;
-    char            *link_target = NULL;
-    char            *tmppath = NULL;
-    char            *link_dir = NULL;
-    char            *dstroot = NULL;
-    char            *buckend = NULL;
-    int             bucklen = 0;
+    int                     ret;
+    dpl_status_t            dplret;
+    struct cloudmig_ctx     *ctx = tinfo->ctx;
+    char                    *link_target = NULL;
+    char                    *tmppath = NULL;
+    char                    *link_dir = NULL;
+    char                    *dstroot = NULL;
+    char                    *buckend = NULL;
+    int                     bucklen = 0;
 
     cloudmig_log(DEBUG_LVL, "[Migrating] Creating symlink %s\n",
                  filestate->obj_path);
@@ -299,12 +301,13 @@ end:
  * and writes it into the destination file.
  */
 static dpl_status_t
-transfer_data_chunk(struct cloudmig_ctx *ctx,
+transfer_data_chunk(struct cldmig_info *tinfo,
                     struct file_transfer_state *filestate,
                     dpl_vfile_t *src, dpl_vfile_t *dst,
                     uint64_t *bytes_transferedp)
 {
     dpl_status_t            ret = DPL_FAILURE;
+    struct cloudmig_ctx     *ctx = tinfo->ctx;
     struct json_object      *rstatus = NULL;
     struct json_object      *wstatus = NULL;
     char                    *buffer = NULL;
@@ -340,14 +343,13 @@ transfer_data_chunk(struct cloudmig_ctx *ctx,
      * Here, create an element for the byte rate computing list
      * and insert it in the right info list.
      */
-    // XXX we should use the thread_idx here instead of hard-coded index
-    ctx->tinfos[0].fdone += buflen;
+    tinfo->fdone += buflen;
     gettimeofday(&tv, NULL);
     e = new_transf_info(&tv, buflen);
     if (e == NULL)
         PRINTERR("Could not update ETA block list, ETA might become erroneous");
     else
-        insert_in_list(&ctx->tinfos[0].infolist, e);
+        insert_in_list(&tinfo->infolist, e);
 
     if (filestate->rstatus)
         json_object_put(filestate->rstatus);
@@ -377,13 +379,14 @@ end:
 }
 
 int
-transfer_chunked(struct cloudmig_ctx *ctx,
+transfer_chunked(struct cldmig_info *tinfo,
                  struct file_transfer_state *filestate)
 {
-    int             ret = EXIT_FAILURE;
-    dpl_status_t    dplret = DPL_FAILURE;
-    dpl_vfile_t     *src = NULL;
-    dpl_vfile_t     *dst = NULL;
+    int                     ret = EXIT_FAILURE;
+    dpl_status_t            dplret = DPL_FAILURE;
+    struct cloudmig_ctx     *ctx = tinfo->ctx;
+    dpl_vfile_t             *src = NULL;
+    dpl_vfile_t             *dst = NULL;
 
     cloudmig_log(WARN_LVL, "Transfer Chunked of file %s\n", filestate->obj_path);
     /*
@@ -425,7 +428,7 @@ transfer_chunked(struct cloudmig_ctx *ctx,
     {
         uint64_t    bytes_transfered;
 
-        ret = transfer_data_chunk(ctx, filestate, src, dst, &bytes_transfered);
+        ret = transfer_data_chunk(tinfo, filestate, src, dst, &bytes_transfered);
         if (ret != EXIT_SUCCESS)
             goto err;
 
@@ -478,15 +481,16 @@ err:
  * status updates, as the migrate_obj() caller completes an object's transfer.
  */
 int
-transfer_whole(struct cloudmig_ctx *ctx,
+transfer_whole(struct cldmig_info *tinfo,
                struct file_transfer_state *filestate)
 {
-    int             ret = EXIT_FAILURE;
-    dpl_status_t    dplret = DPL_FAILURE;
-    char            *buffer = NULL;
-    unsigned int    buflen = 0;
-    dpl_dict_t      *metadata = NULL;
-    dpl_sysmd_t     sysmd;
+    int                     ret = EXIT_FAILURE;
+    dpl_status_t            dplret = DPL_FAILURE;
+    struct cloudmig_ctx     *ctx = tinfo->ctx;
+    char                    *buffer = NULL;
+    unsigned int            buflen = 0;
+    dpl_dict_t              *metadata = NULL;
+    dpl_sysmd_t             sysmd;
 
     memset(&sysmd, 0, sizeof(sysmd));
 
@@ -526,7 +530,7 @@ end:
  * write the data read into the file that is to be written.
  */
 int
-transfer_file(struct cloudmig_ctx* ctx,
+transfer_file(struct cldmig_info* tinfo,
               struct file_transfer_state* filestate)
 {
     int                     ret;
@@ -536,17 +540,17 @@ transfer_file(struct cloudmig_ctx* ctx,
     filestate->obj_path);
 
 
-    if (ctx->tinfos[0].config_flags & AUTO_CREATE_DIRS)
+    if (tinfo->config_flags & AUTO_CREATE_DIRS)
     {
-        if (create_parent_dirs(ctx, filestate) == EXIT_FAILURE)
+        if (create_parent_dirs(tinfo->ctx, filestate) == EXIT_FAILURE)
         {
             ret = EXIT_FAILURE;
             goto err;
         }
     }
 
-    ret = (filestate->fixed.size > ctx->options.block_size) ?
-            transfer_chunked(ctx, filestate) : transfer_whole(ctx, filestate);
+    ret = (filestate->fixed.size > tinfo->ctx->options.block_size) ?
+            transfer_chunked(tinfo, filestate) : transfer_whole(tinfo, filestate);
 
     cloudmig_log(INFO_LVL, "[Migrating] File '%s' transfer %s !\n",
                  filestate->obj_path, ret == EXIT_SUCCESS ? "succeeded" : "failed");

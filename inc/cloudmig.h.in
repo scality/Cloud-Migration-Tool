@@ -74,7 +74,14 @@ struct cldmig_config
  */
 struct cldmig_info
 {
+    struct cloudmig_ctx     *ctx;
     int                     config_flags;
+
+    bool                    stop;
+    pthread_mutex_t         lock;
+    int                     lock_inited;
+    pthread_t               thr;
+
     uint32_t                fsize;
     uint32_t                fdone;
     char                    *fpath;
@@ -93,34 +100,67 @@ struct cloudmig_ctx
     dpl_ctx_t               *dest_ctx;
     dpl_ctx_t               *status_ctx;
     int                     viewer_fd;
+
     struct cloudmig_status  *status;
+
+    /*
+     * contexts for each worker/migrator thread
+     */
     struct cldmig_info      *tinfos;
 };
-#define CTX_INITIALIZER { CONF_INITIALIZER, OPTIONS_INITIALIZER, NULL, NULL, NULL, -1, NULL, NULL }
+#define CTX_INITIALIZER {           \
+    CONF_INITIALIZER,               \
+    OPTIONS_INITIALIZER,            \
+    NULL,                           \
+    NULL,                           \
+    NULL,                           \
+    -1,                             \
+    NULL,                           \
+    NULL,                           \
+}
 
 /*
- * Required prototypes
+ * options.c
  */
 int     retrieve_opts(struct cloudmig_options *, int argc, char *argv[]);
+
+/*
+ * load_config.c
+ */
 int     load_config(struct cldmig_config *conf, struct cloudmig_options *);
-int     setup_var_pid_and_sock(char *src, char *dst);
+
+/*
+ * load_profiles.c
+ */
 int     load_profiles(struct cloudmig_ctx *ctx);
-int     status_store_load(struct cloudmig_ctx *ctx, char *src_host, char *dst_host);
-int     status_next_incomplete_entry(struct cloudmig_ctx *ctx,
-                                     struct file_transfer_state *filestate);
-int		status_update_entry(struct cloudmig_ctx *ctx,
-                            struct file_transfer_state *filestate,
-                            uint64_t offset);
-int     migrate(struct cloudmig_ctx *ctx);
+
+/*
+ * delete_files.c
+ */
+void    delete_source(struct cloudmig_ctx *ctx);
+
+/*
+ * display.c
+ */
+int     setup_var_pid_and_sock(char *src, char *dst);
+void    unsetup_var_pid_and_sock();
 void    cloudmig_check_for_clients(struct cloudmig_ctx *ctx);
 void    cloudmig_update_client(struct cloudmig_ctx *ctx);
-void    delete_source(struct cloudmig_ctx *ctx);
-void    unsetup_var_pid_and_sock();
-int     transfer_file(struct cloudmig_ctx *ctx,
+
+/*
+ * transfer.c
+ */
+int     migrate(struct cloudmig_ctx *ctx);
+void    migration_stop(struct cloudmig_ctx *ctx);
+
+/*
+ * file_transfer.c
+ */
+int     transfer_file(struct cldmig_info *tinfo,
                       struct file_transfer_state *filestate);
-int     create_directory(struct cloudmig_ctx *ctx,
+int     create_directory(struct cldmig_info *tinfo,
                          struct file_transfer_state *filestate);
-int     create_symlink(struct cloudmig_ctx *ctx,
+int     create_symlink(struct cldmig_info *tinfo,
                        struct file_transfer_state *filestate);
 
 dpl_canned_acl_t    get_file_canned_acl(dpl_ctx_t* ctx, char *filename);

@@ -34,16 +34,16 @@
 #include "status_digest.h"
 
 static int
-migrate_with_retries(struct cloudmig_ctx *ctx,
+migrate_with_retries(struct cldmig_info *tinfo,
                      struct file_transfer_state *filestate,
-                     int (*migfunc)(struct cloudmig_ctx*, struct file_transfer_state*),
+                     int (*migfunc)(struct cldmig_info *, struct file_transfer_state*),
                      int n_attempts)
 {
     int ret;
     int failures = 0;
 
 retry:
-    ret = migfunc(ctx, filestate);
+    ret = migfunc(tinfo, filestate);
     if (ret != EXIT_SUCCESS)
     {
         if (++failures < n_attempts)
@@ -62,24 +62,24 @@ retry:
 }
 
 static int
-migrate_object(struct cloudmig_ctx* ctx,
+migrate_object(struct cldmig_info *tinfo,
                struct file_transfer_state* filestate)
 {
     int             failures = 0;
     int             ret = EXIT_FAILURE;
-    int             (*migfunc)(struct cloudmig_ctx*, struct file_transfer_state*) = NULL;
+    int             (*migfunc)(struct cldmig_info*, struct file_transfer_state*) = NULL;
 
     cloudmig_log(DEBUG_LVL, "[Migrating] : starting migration of file %s\n",
                  filestate->obj_path);
 
-    /*
-     * First init the thread's internal data
-     */
-    // XXX Lock it
-    ctx->tinfos[0].fsize = filestate->fixed.size;
-    ctx->tinfos[0].fdone = filestate->fixed.offset;
-    ctx->tinfos[0].fpath = filestate->obj_path;
-    // XXX Unlock it
+    /* Initialize the thread's internal data */
+    {
+        pthread_mutex_lock(&tinfo->lock);
+        tinfo->fsize = filestate->fixed.size;
+        tinfo->fdone = filestate->fixed.offset;
+        tinfo->fpath = filestate->obj_path;
+        pthread_mutex_unlock(&tinfo->lock);
+    }
 
     switch (filestate->fixed.type)
     {
@@ -94,25 +94,26 @@ migrate_object(struct cloudmig_ctx* ctx,
         migfunc = &transfer_file;
         break ;
     }
-    ret = migrate_with_retries(ctx, filestate, migfunc, 3);
+    ret = migrate_with_retries(tinfo, filestate, migfunc, 3);
     if (ret != EXIT_SUCCESS)
         goto ret;
 
-    status_store_entry_complete(ctx, filestate);
+    status_store_entry_complete(tinfo->ctx, filestate);
 
     cloudmig_log(INFO_LVL,
     "[Migrating] : file %s migrated.\n", filestate->obj_path);
 
 ret:
-    /*
-     * Cleat the thread's internal data
-     */
-    // XXX Lock it
-    ctx->tinfos[0].fsize = 0;
-    ctx->tinfos[0].fdone = 0;
-    ctx->tinfos[0].fpath = NULL;
-    clear_list(&(ctx->tinfos[0].infolist));
-    // XXX Unlock it
+    /* Clean the thread's internal data */
+    {
+        pthread_mutex_lock(&tinfo->lock);
+        tinfo->fsize = 0;
+        tinfo->fdone = 0;
+        tinfo->fpath = NULL;
+        clear_list(&tinfo->infolist);
+        pthread_mutex_unlock(&tinfo->lock);
+    }
+
     return (failures == 3);
 }
 
@@ -122,24 +123,33 @@ ret:
  *
  * Loops on every entry and starts the transfer of each.
  */
-static int
-migrate_loop(struct cloudmig_ctx* ctx)
+static void*
+migrate_worker_loop(struct cldmig_info *tinfo)
 {
-    unsigned int                ret = EXIT_FAILURE;
+    int                         found = 0;
     struct file_transfer_state  cur_filestate = CLOUDMIG_FILESTATE_INITIALIZER;
     size_t                      nbfailures = 0;
 
     // The call allocates the buffer for the bucket, so we must free it
     // The same goes for the cur_filestate's name field.
-    while ((ret = status_store_next_incomplete_entry(ctx, &cur_filestate)) == 1)
+    pthread_mutex_lock(&tinfo->lock);
+    while (tinfo->stop == false
+           && (found = status_store_next_incomplete_entry(tinfo->ctx, &cur_filestate)) == 1)
     {
-        if (migrate_object(ctx, &cur_filestate))
+        pthread_mutex_unlock(&tinfo->lock);
+        if (migrate_object(tinfo, &cur_filestate))
             ++nbfailures;
 
         status_store_release_entry(&cur_filestate);
+        pthread_mutex_lock(&tinfo->lock);
     }
+    pthread_mutex_unlock(&tinfo->lock);
 
-    return (ret == ENODATA ? nbfailures : ret);
+    /*
+     * Found will equal -1 only in case of fatal status error.
+     * It shall equal either 1 on program interrupt, or 0 on migration end.
+     */
+    return found != -1 ? (void*)nbfailures : (void*)-1;
 }
 
 
@@ -152,22 +162,44 @@ migrate_loop(struct cloudmig_ctx* ctx)
 int
 migrate(struct cloudmig_ctx* ctx)
 {
-    int                         ret = EXIT_FAILURE;
+    int                         nb_failures = 0;
+    int                         ret;
 
     cloudmig_log(DEBUG_LVL, "Starting migration...\n");
+
+    for (int i=0; i < ctx->options.nb_threads; ++i)
+    {
+        ctx->tinfos[i].stop = false;
+        if (pthread_create(&ctx->tinfos[i].thr, NULL,
+                           (void*(*)(void*))migrate_worker_loop,
+                           &ctx->tinfos[i]) == -1)
+        {
+            PRINTERR("Could not start worker thread %i/%i", i, ctx->options.nb_threads);
+            nb_failures = 1;
+            // Stop all the already-running threads before attempting to join
+            migration_stop(ctx);
+            break ;
+        }
+    }
+
     /*
-     * Since th S3 api does not allow an infinite number of buckets,
-     * we can think ahead of time and create all the buckets that we'll
-     * need.
+     * Join all the threads, and cumulate their error counts
      */
+    for (int i=0; i < ctx->options.nb_threads; i++)
+    {
+        int errcount;
+        ret = pthread_join(ctx->tinfos[i].thr, (void**)&errcount);
+        if (ret != 0)
+            cloudmig_log(WARN_LVL, "Could not join thread %i: %s.\n", i, strerror(errno));
+        else
+            ret += errcount;
+    }
 
-    ret = migrate_loop(ctx);
-
-    // In any case, attempt to update the status digest before anything else.
+    // In any case, attempt to update the status digest before doing anything else
     (void)status_digest_upload(ctx->status->digest);
 
     // Check if it was the end of the transfer by checking ret against 0
-    if (ret == 0) // 0 == number of failures that occured.
+    if (nb_failures == 0) // 0 == number of failures that occured.
     {
         cloudmig_log(INFO_LVL, "Migration finished with success !\n");
         if (ctx->tinfos[0].config_flags & DELETE_SOURCE_DATA)
@@ -180,10 +212,21 @@ migrate(struct cloudmig_ctx* ctx)
         goto err;
     }
 
-    ret = EXIT_SUCCESS;
-
 err:
 
-    return ret;
+    return nb_failures;
 }
 
+void
+migration_stop(struct cloudmig_ctx *ctx)
+{
+    for (int i=0; i < ctx->options.nb_threads; i++)
+    {
+        if (ctx->tinfos[i].lock_inited == 0)
+            continue ;
+
+        pthread_mutex_lock(&ctx->tinfos[i].lock);
+        ctx->tinfos[i].stop = true;
+        pthread_mutex_unlock(&ctx->tinfos[i].lock);
+    }
+}

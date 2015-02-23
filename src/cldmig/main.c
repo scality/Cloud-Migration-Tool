@@ -39,6 +39,7 @@
 enum cloudmig_loglevel  gl_loglevel = INFO_LVL;
 bool                    gl_isbackground = false;
 
+static struct cloudmig_ctx     *gl_ctx = NULL;
 
 void
 cloudmig_sighandler(int sig)
@@ -46,10 +47,11 @@ cloudmig_sighandler(int sig)
     switch (sig)
     {
     case SIGINT:
-        cloudmig_log(INFO_LVL, "Interrupted by SINGINT... stopping.\n");
-        unsetup_var_pid_and_sock();
-        cloudmig_closelog();
-        exit(EXIT_SUCCESS);
+        if (gl_ctx)
+        {
+            cloudmig_log(INFO_LVL, "Interrupted by SINGINT... stopping.\n");
+            migration_stop(gl_ctx);
+        }
         break ;
     default:
         break;
@@ -62,10 +64,13 @@ int main(int argc, char* argv[])
     time_t                  starttime = 0;
     time_t                  difftime = 0;
     struct cloudmig_ctx     ctx = CTX_INITIALIZER;
+    struct sigaction        signal_action;
     // hosts strings for source and destination
     char	            *src_hostname = NULL;
     char	            *dst_hostname = NULL;
     dpl_status_t	    dplret = DPL_FAILURE;
+
+    gl_ctx = &ctx;
 
     // set stderr as logger for the time being...
     cloudmig_openlog(NULL);
@@ -101,14 +106,24 @@ int main(int argc, char* argv[])
     ctx.tinfos = calloc(ctx.options.nb_threads, sizeof(*ctx.tinfos));
     if (ctx.tinfos == NULL)
     {
-        PRINTERR("Could not allocate memory for transfer statuses.", 0);
+        PRINTERR("Could not allocate memory for transfer statuses.");
         return (EXIT_FAILURE);
     }
 
     // Copy Read-Only config data to each thread info to avoid the need
     // to manage concurrent accesses.
     for (int i=0; i < ctx.options.nb_threads; i++)
+    {
+        ctx.tinfos[i].ctx = &ctx;
         ctx.tinfos[i].config_flags = ctx.options.flags;
+        ctx.tinfos[i].stop = true;
+        if (pthread_mutex_init(&ctx.tinfos[i].lock, NULL) == -1)
+        {
+            PRINTERR("Could not initialize thread %i's mutex.", i);
+            goto failure;
+        }
+        ctx.tinfos[i].lock_inited = 1;
+    }
 
     // Allocate/Initialize the two droplet contexts
     if (load_profiles(&ctx) == EXIT_FAILURE)
@@ -159,9 +174,14 @@ int main(int argc, char* argv[])
     uint64_t done_objects = status_digest_get(ctx.status->digest, DIGEST_DONE_OBJECTS);
     uint64_t done_bytes = status_digest_get(ctx.status->digest, DIGEST_DONE_BYTES);
 
-    signal(SIGINT, &cloudmig_sighandler);
+    /* Setup the signal catching before starting the migration */
+    signal_action.sa_handler = &cloudmig_sighandler;
+    sigemptyset(&signal_action.sa_mask);
+    signal_action.sa_flags = 0;
+    sigaction(SIGINT, &signal_action, NULL);
 
-    if (migrate(&ctx) == EXIT_FAILURE)
+    ret = migrate(&ctx);
+    if (ret != EXIT_SUCCESS)
         goto failure;
 
     // Migration ended : Now we can display a status for the migration session.
@@ -233,6 +253,7 @@ failure:
             free(ctx.options.dst_buckets[i]);
         free(ctx.options.dst_buckets);
     }
+    cloudmig_closelog();
 
     return ret;
 }
