@@ -446,6 +446,9 @@ status_store_do_load_update(struct cloudmig_ctx *ctx, int regen_digest)
     ret = EXIT_SUCCESS;
 
 err:
+    if (dir_hdl)
+        dpl_closedir(dir_hdl);
+
     return ret;
 }
 
@@ -528,6 +531,8 @@ end:
         free(ctx->status->store_path);
         ctx->status->store_path = NULL;
     }
+    if (storename)
+        free(storename);
 
     return ret;
 }
@@ -683,10 +688,14 @@ status_store_free(struct cloudmig_status *status)
     if (status->digest)
         status_digest_free(status->digest);
 
-    for (int i=0; i < status->n_buckets; ++i)
+    if (status->buckets)
     {
-        if (status->buckets[i])
-            status_bucket_free(status->buckets[i]);
+        for (int i=0; i < status->n_buckets; ++i)
+        {
+            if (status->buckets[i])
+                status_bucket_free(status->buckets[i]);
+        }
+        free(status->buckets);
     }
     
     if (status->lock_inited)

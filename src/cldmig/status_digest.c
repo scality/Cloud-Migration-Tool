@@ -210,6 +210,8 @@ end:
         free(buffer);
     if (json)
         json_object_put(json);
+    if (tokener)
+        json_tokener_free(tokener);
 
     return ret;
 }

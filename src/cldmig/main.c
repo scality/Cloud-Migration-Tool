@@ -205,12 +205,34 @@ failure:
     }
     if (ctx.src_ctx)
         unsetup_var_pid_and_sock();
+
     if (src_hostname)
 	free(src_hostname);
     if (dst_hostname)
 	free(dst_hostname);
+
     if (ctx.status)
         status_store_free(ctx.status);
+    if (ctx.tinfos)
+        free(ctx.tinfos);
+    if (ctx.src_ctx)
+        dpl_ctx_free(ctx.src_ctx);
+    if (ctx.dest_ctx)
+        dpl_ctx_free(ctx.dest_ctx);
+    if (ctx.status_ctx)
+        dpl_ctx_free(ctx.status_ctx);
+    if (ctx.options.src_buckets)
+    {
+        for (int i=0; i < ctx.options.n_buckets; i++)
+            free(ctx.options.src_buckets[i]);
+        free(ctx.options.src_buckets);
+    }
+    if (ctx.options.dst_buckets)
+    {
+        for (int i=0; i < ctx.options.n_buckets; i++)
+            free(ctx.options.dst_buckets[i]);
+        free(ctx.options.dst_buckets);
+    }
 
     return ret;
 }

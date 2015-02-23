@@ -102,6 +102,8 @@ unsetup_var_pid_and_sock()
     unlink(path);
     rmdir(unique_sockfile);
     rmdir("/tmp/cloudmig/");
+    free(unique_sockfile);
+    unique_sockfile = NULL;
 }
 
 int

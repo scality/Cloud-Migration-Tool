@@ -374,6 +374,8 @@ transfer_whole(struct cloudmig_ctx *ctx,
     dpl_dict_t      *metadata = NULL;
     dpl_sysmd_t     sysmd;
 
+    memset(&sysmd, 0, sizeof(sysmd));
+
     dplret = dpl_fget(ctx->src_ctx, filestate->obj_path, NULL, NULL, NULL,
                       &buffer, &buflen, &metadata, &sysmd);
     if (dplret != DPL_SUCCESS)
@@ -391,7 +393,6 @@ transfer_whole(struct cloudmig_ctx *ctx,
     }
 
     status_digest_add(ctx->status->digest, DIGEST_DONE_BYTES, filestate->fixed.size);
-
 
     ret = EXIT_SUCCESS;
 
@@ -414,7 +415,7 @@ int
 transfer_file(struct cloudmig_ctx* ctx,
               struct file_transfer_state* filestate)
 {
-    int                     ret = EXIT_FAILURE;
+    int                     ret;
 
     cloudmig_log(INFO_LVL,
     "[Migrating] : file '%s' is a regular file : starting transfer...\n",
@@ -424,17 +425,18 @@ transfer_file(struct cloudmig_ctx* ctx,
     if (ctx->tinfos[0].config_flags & AUTO_CREATE_DIRS)
     {
         if (create_parent_dirs(ctx, filestate) == EXIT_FAILURE)
+        {
+            ret = EXIT_FAILURE;
             goto err;
+        }
     }
 
     ret = (filestate->fixed.size > ctx->options.block_size) ?
-          transfer_chunked(ctx, filestate)
-        : transfer_whole(ctx, filestate);
+            transfer_chunked(ctx, filestate) : transfer_whole(ctx, filestate);
 
-    cloudmig_log(INFO_LVL, "[Migrating] File '%s' transfered successfully !\n",
-                 filestate->obj_path);
+    cloudmig_log(INFO_LVL, "[Migrating] File '%s' transfer %s !\n",
+                 filestate->obj_path, ret == EXIT_SUCCESS ? "succeeded" : "failed");
 
 err:
-
     return ret;
 }

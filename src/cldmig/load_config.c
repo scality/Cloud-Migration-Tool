@@ -175,8 +175,8 @@ config_update_json_buckets(struct cloudmig_options *options,
 
     n_buckets = json_object_object_length(buckets);
 
-    src_buckets = calloc(n_buckets, sizeof(*options->src_buckets));
-    dst_buckets = calloc(n_buckets, sizeof(*options->dst_buckets));
+    src_buckets = calloc(n_buckets, sizeof(*src_buckets));
+    dst_buckets = calloc(n_buckets, sizeof(*dst_buckets));
     if (src_buckets == NULL || dst_buckets == NULL)
     {
         PRINTERR("Could not allocate buckets for configuration.\n");
@@ -202,6 +202,11 @@ config_update_json_buckets(struct cloudmig_options *options,
         }
         ++i;
     }
+
+    if (options->src_buckets)
+        free(options->src_buckets);
+    if (options->dst_buckets)
+        free(options->dst_buckets);
 
     options->n_buckets = n_buckets;
     options->src_buckets = src_buckets;
@@ -549,6 +554,8 @@ err:
         fclose(src_profile);
     if (dst_profile != NULL)
         fclose(dst_profile);
+    if (status_profile != NULL)
+        fclose(status_profile);
 
     if (unlink_profiles)
     {

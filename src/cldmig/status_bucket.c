@@ -119,13 +119,15 @@ status_bucket_filename(const char *locator)
     PRINTERR("name encoded as %s\n", encoded);
 
     len = strlen(encoded);
-    filename = realloc(encoded, len + 5);
+    filename = realloc(encoded, len + 6);
     if (filename == NULL)
         goto end;
     encoded = NULL;
     strcpy(&filename[len], ".json");
 
-    PRINTERR("Encoded name(%s)=%s.\n", locator[0] == 0 ? locator+1 : locator, filename);
+    PRINTERR("Encoded name(%s)=%s.\n",
+             locator && locator[0] == 0 ? locator+1 : locator,
+             filename);
 
     ret = filename;
     filename = NULL;
