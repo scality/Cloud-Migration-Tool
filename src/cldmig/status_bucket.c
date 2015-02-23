@@ -1265,6 +1265,7 @@ status_bucket_next_ex(dpl_ctx_t *status_ctx,
     struct json_object      *obj = NULL;
     struct json_object      *objfield = NULL;
     uint64_t                n_objects = 0;
+    dpl_ftype_t             objtype = DPL_FTYPE_UNDEF;
     uint64_t                objsize = 0;
     bool                    objdone = 0;
     const char              *objname = NULL;
@@ -1328,6 +1329,19 @@ status_bucket_next_ex(dpl_ctx_t *status_ctx,
         objdone = json_object_get_boolean(objfield);
 
         if (json_object_object_get_ex(obj,
+                                      CLOUDMIG_STATUS_BUCKETENTRY_TYPE,
+                                      &objfield) == FALSE
+            || !json_object_is_type(objfield, json_type_int))
+        {
+            PRINTERR("[Bucket Status Next Entry] "
+                     "Could not find object '%s' within item's json status.\n",
+                     CLOUDMIG_STATUS_BUCKETENTRY_TYPE);
+            ret = -1;
+            goto end;
+        }
+        objtype = (dpl_ftype_t)json_object_get_int(objfield);
+
+        if (json_object_object_get_ex(obj,
                                       CLOUDMIG_STATUS_BUCKETENTRY_PATH,
                                       &objfield) == FALSE
             || !json_object_is_type(objfield, json_type_string))
@@ -1387,6 +1401,7 @@ status_bucket_next_ex(dpl_ctx_t *status_ctx,
             bucket_locked = false;
 
             // Fill the filestate with the match found
+            filestate->fixed.type = (uint32_t)objtype;
             filestate->fixed.size = objsize;
             filestate->fixed.offset = 0;
             filestate->state_idx = cur_entry;

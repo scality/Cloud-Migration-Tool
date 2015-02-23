@@ -81,6 +81,7 @@ struct file_state_entry
 {
     uint64_t    size;       // size of the file
     uint64_t    offset;     // offset/quantity already copied
+    uint32_t    type;       // Type of file, as read in json status
     /*
     int8_t      dpl_location;
     int8_t      dpl_acl;
@@ -108,7 +109,7 @@ struct file_transfer_state
 #define CLOUDMIG_FILESTATE_INITIALIZER  \
     {                                   \
         NULL,                           \
-        { 0, 0 },                       \
+        { 0, 0, 0 },                    \
         NULL,                           \
         NULL,                           \
         NULL,                           \

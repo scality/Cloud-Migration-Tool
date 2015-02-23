@@ -33,18 +33,6 @@
 #include "status_store.h"
 #include "status_digest.h"
 
-/*
- * Returns a value allowing to identify whether the file is
- * a directory or a standard file
- */
-static dpl_ftype_t
-get_migrating_file_type(struct file_transfer_state* filestate)
-{
-    if (filestate->obj_path[strlen(filestate->obj_path) - 1] == '/')
-        return DPL_FTYPE_DIR;
-    return DPL_FTYPE_REG;
-}
-
 static int
 migrate_with_retries(struct cloudmig_ctx *ctx,
                      struct file_transfer_state *filestate,
@@ -75,11 +63,10 @@ retry:
 
 static int
 migrate_object(struct cloudmig_ctx* ctx,
-              struct file_transfer_state* filestate)
+               struct file_transfer_state* filestate)
 {
     int             failures = 0;
     int             ret = EXIT_FAILURE;
-    dpl_ftype_t     ftype = DPL_FTYPE_UNDEF;
     int             (*migfunc)(struct cloudmig_ctx*, struct file_transfer_state*) = NULL;
 
     cloudmig_log(DEBUG_LVL, "[Migrating] : starting migration of file %s\n",
@@ -92,20 +79,17 @@ migrate_object(struct cloudmig_ctx* ctx,
     ctx->tinfos[0].fsize = filestate->fixed.size;
     ctx->tinfos[0].fdone = filestate->fixed.offset;
     ctx->tinfos[0].fpath = filestate->obj_path;
-    ftype = get_migrating_file_type(filestate);
     // XXX Unlock it
 
-    switch (ftype)
+    switch (filestate->fixed.type)
     {
     case DPL_FTYPE_DIR:
         migfunc = &create_directory;
         break ;
-    case DPL_FTYPE_REG:
-        migfunc = &transfer_file;
         break ;
+    case DPL_FTYPE_REG:
     default:
-        PRINTERR("%s: File %s has no type attributed ? not transfered...\n",
-                 __FUNCTION__, filestate->obj_path);
+        migfunc = &transfer_file;
         break ;
     }
     ret = migrate_with_retries(ctx, filestate, migfunc, 3);
