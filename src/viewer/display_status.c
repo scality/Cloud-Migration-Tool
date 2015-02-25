@@ -31,7 +31,6 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "status.h"
 #include "display_protocol.h"
 #include "data.h"
 #include "viewer.h"
@@ -41,23 +40,23 @@ get_size_order(uint64_t size, char **str)
 {
     float   q = (float)size;
 
-    *str = "o";
+    *str = "B";
     if (q > 1024.)
     {
         q /= 1024.;
-        *str = "Ko";
+        *str = "KB";
         if (q > 1024.)
         {
             q /= 1024.;
-            *str = "Mo";
+            *str = "MB";
             if (q > 1024.)
             {
                 q /= 1024.;
-                *str = "Go";
+                *str = "GB";
                 if (q > 1024.)
                 {
                     q /= 1024.;
-                    *str = "To";
+                    *str = "TB";
                 }
             }
         }
@@ -167,9 +166,9 @@ print_line(int thread_id, char *fname,
     char    *msg = NULL;
     int     statlen = 0;
     int     tmplen = 0;
-    if (btotal == 0)
+    if (fname == NULL || btotal == 0)
     {
-        mvprintw(thread_id + 2, 0, "Thread[%i] : inactive...", thread_id);
+        mvprintw(thread_id + 2, 0, "Thread[%i] : done...", thread_id);
         return EXIT_SUCCESS;
     }
     // nb of highlighted chars of the progress bar.
@@ -227,6 +226,7 @@ display(struct cldmig_global_info *ginfo,
     int         ret;
     uint64_t    total_byterate = 0;
     uint64_t    added_done = 0;
+    uint32_t    line;
 
     for (uint32_t i=0; i < thr_nb; ++i)
     {
@@ -248,11 +248,12 @@ display(struct cldmig_global_info *ginfo,
             return EXIT_FAILURE;
     }
 
-    if (msgs)
+    line = LINES - 1;
+    while (msgs)
     {
-        /*line = LINES - 1;
         mvprintw(line--, 0, "[%s] : %s",
-                 msgs->type ? "HAS_MSG_TYPE" : "HAS_NO_MSG_TYPE", msgs->msg);*/
+                 msgs->type ? "HAS_MSG_TYPE" : "HAS_NO_MSG_TYPE", msgs->msg);
+        msgs = msgs->next;
     }
     refresh();
     return EXIT_SUCCESS;

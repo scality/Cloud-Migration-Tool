@@ -109,12 +109,8 @@ ADD_DEFINITIONS(-W -Wall -Werror -std=c99)
 # The _GNU_SOURCE define has multiple uses : strdup in c99, asprintf, ...
 ADD_DEFINITIONS(-D_GNU_SOURCE)
 
-CONFIGURE_FILE(${PROJECT_SOURCE_DIR}/inc/cloudmig.h.in
-               ${PROJECT_BINARY_DIR}/inc/cloudmig.h
-)
-INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/inc
-                    ${PROJECT_BINARY_DIR}/inc
-		    /usr/include/json
+CONFIGURE_FILE(${CLOUDMIG_SOURCE_DIR}/inc/cloudmig/cloudmig.h.in
+               ${CLOUDMIG_BINARY_DIR}/inc/cloudmig/cloudmig.h
 )
 
 # This prevent the paths to the libraries to be removed at install time.

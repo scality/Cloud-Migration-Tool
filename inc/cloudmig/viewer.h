@@ -24,23 +24,17 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef __VIEWER_DATA_H__
-#define __VIEWER_DATA_H__
+#ifndef __CLOUDMIG_VIEWER_TASK_H__
+#define __CLOUDMIG_VIEWER_TASK_H__
 
-struct thread_info
-{
-    uint32_t            size;
-    uint32_t            sz_done;
-    uint32_t            byterate;
-    uint32_t            fnamlen;
-    char                *name;
-};
+struct cloudmig_ctx;
+struct cldmig_viewer;
 
-struct message
-{
-    struct message      *next;
-    enum msg_type       type;
-    char                *msg;
-};
+struct cldmig_viewer*   viewer_create(struct cloudmig_ctx *ctx, int fd);
+void                    viewer_destroy(struct cldmig_viewer *viewer);
 
-#endif /* ! __VIEWER_DATA_H__ */
+void                    viewer_run(struct cldmig_viewer *viewer);
+void                    viewer_stop(struct cldmig_viewer *viewer);
+void                    viewer_trigger_update(struct cldmig_viewer *viewer);
+
+#endif /* ! __CLOUDMIG_VIEWER_TASK_H__ */

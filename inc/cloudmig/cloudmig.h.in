@@ -55,6 +55,7 @@
  * Default config values
  */
 #define CLOUDMIG_DEFAULT_BLOCK_SIZE     (256*1024*1024) // 256MiB
+#define CLOUDMIG_ETA_TIMEFRAME          10 // in seconds
 
 
 // Used for config retrieval.
@@ -99,9 +100,10 @@ struct cloudmig_ctx
     dpl_ctx_t               *src_ctx;
     dpl_ctx_t               *dest_ctx;
     dpl_ctx_t               *status_ctx;
-    int                     viewer_fd;
 
     struct cloudmig_status  *status;
+
+    struct cldmig_display   *display;
 
     /*
      * contexts for each worker/migrator thread
@@ -114,7 +116,7 @@ struct cloudmig_ctx
     NULL,                           \
     NULL,                           \
     NULL,                           \
-    -1,                             \
+    NULL,                           \
     NULL,                           \
     NULL,                           \
 }
@@ -138,14 +140,6 @@ int     load_profiles(struct cloudmig_ctx *ctx);
  * delete_files.c
  */
 void    delete_source(struct cloudmig_ctx *ctx);
-
-/*
- * display.c
- */
-int     setup_var_pid_and_sock(char *src, char *dst);
-void    unsetup_var_pid_and_sock();
-void    cloudmig_check_for_clients(struct cloudmig_ctx *ctx);
-void    cloudmig_update_client(struct cloudmig_ctx *ctx);
 
 /*
  * transfer.c

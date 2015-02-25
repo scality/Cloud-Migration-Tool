@@ -33,6 +33,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -43,14 +44,38 @@
 
 #include "status_digest.h"
 #include "status_store.h"
+#include "display.h"
+#include "viewer.h"
 
+struct cldmig_display
+{
+    struct cloudmig_ctx     *ctx;
 
-static int  unique_accept_sock = -1;
-static char *unique_sockfile = NULL;
+    pthread_t               thread;
+    pthread_mutex_t         lock;
+    int                     lock_inited;
+    int                     stop;
 
+    int                     accept_sock;
+    char                    *sockfile;
+
+    struct cldmig_viewer    *viewer;
+};
+
+static void
+_display_lock(struct cldmig_display *disp)
+{
+    pthread_mutex_lock(&disp->lock);
+}
+
+static void
+_display_unlock(struct cldmig_display *disp)
+{
+    pthread_mutex_unlock(&disp->lock);
+}
 
 static int
-create_log_socket(char * filename)
+_display_create_accept_socket(char * filename)
 {
     struct sockaddr_un  server_addr;
     int                 listen_fd = -1;
@@ -87,28 +112,161 @@ create_log_socket(char * filename)
     return listen_fd;
 }
 
-void
-unsetup_var_pid_and_sock()
+static void
+_display_shutdown(struct cldmig_display *disp)
 {
-    char    path[64];
-    shutdown(unique_accept_sock, SHUT_RDWR);
-    close(unique_accept_sock);
-
-    // For unlink, errors are not checked since other migrations may be running.
-    unlink(unique_sockfile);
-    unique_sockfile[strlen(unique_sockfile) - 12] = '\0'; // remove "display.sock"
-    strcpy(path, unique_sockfile);
-    strcat(path, "description.txt");
-    unlink(path);
-    rmdir(unique_sockfile);
-    rmdir("/tmp/cloudmig/");
-    free(unique_sockfile);
-    unique_sockfile = NULL;
+    if (disp->accept_sock != -1)
+    {
+        shutdown(disp->accept_sock, SHUT_RDWR);
+        close(disp->accept_sock);
+        disp->accept_sock = -1;
+    }
 }
 
-int
-setup_var_pid_and_sock(char *src, char *dst)
+static void*
+_display_main_loop(struct cldmig_display *disp)
 {
+
+    struct timeval          timeout = {0, 0};
+    int                     accept_fd = -1;
+    fd_set                  rfds;
+    int                     client_fd = -1;
+    struct sockaddr_un      client_addr;
+    socklen_t               client_socklen = sizeof(client_addr);
+
+    _display_lock(disp);
+    accept_fd = disp->accept_sock;
+    while (!disp->stop)
+    {
+        _display_unlock(disp);
+
+        FD_ZERO(&rfds);
+        FD_SET(accept_fd, &rfds);
+        if (select(accept_fd + 1, &rfds, NULL, NULL, &timeout) == -1)
+        {
+            if (errno != EINTR)
+                PRINTERR("%s: Could not select anymore on listening socket: %s.\n",
+                         __FUNCTION__, strerror(errno));
+            goto relock;
+        }
+
+        // Client waiting for accept
+        if (FD_ISSET(accept_fd, &rfds))
+        {
+            client_fd = accept(accept_fd,
+                               (struct sockaddr*)&client_addr,
+                               &client_socklen);
+            if (client_fd == -1)
+            {
+                PRINTERR("%s: Could not accept viewer connection : %s.\n",
+                         __FUNCTION__, strerror);
+                goto relock;
+            }
+
+            _display_lock(disp);
+            disp->viewer = viewer_create(disp->ctx, client_fd);
+            _display_unlock(disp);
+
+            if (disp->viewer)
+            {
+                viewer_run(disp->viewer);
+                _display_lock(disp);
+                viewer_destroy(disp->viewer);
+                disp->viewer = NULL;
+                _display_unlock(disp);
+            }
+            else
+            {
+                shutdown(client_fd, SHUT_RDWR);
+                close(client_fd);
+            }
+        }
+
+relock:
+        _display_lock(disp);
+    }
+    _display_unlock(disp);
+
+    return NULL;
+}
+
+void
+display_trigger_update(struct cldmig_display *disp)
+{
+    if (disp->lock_inited)
+    {
+        _display_lock(disp);
+        if (disp->viewer)
+            viewer_trigger_update(disp->viewer);
+        _display_unlock(disp);
+    }
+}
+
+void
+display_stop(struct cldmig_display *disp)
+{
+    int do_join = 0;
+
+    if (disp->lock_inited)
+    {
+        _display_lock(disp);
+        if (disp->stop == 0)
+        {
+            do_join = 1;
+            disp->stop = 1;
+            _display_shutdown(disp);
+            if (disp->viewer)
+                viewer_stop(disp->viewer);
+        }
+        _display_unlock(disp);
+    }
+
+    if (do_join)
+        pthread_join(disp->thread, NULL);
+}
+
+void
+display_destroy(struct cldmig_display *disp)
+{
+    char    path[64];
+
+    display_stop(disp);
+
+    if (disp->viewer)
+    {
+        viewer_stop(disp->viewer);
+        viewer_destroy(disp->viewer);
+        disp->viewer = NULL;
+    }
+
+    // For unlink, errors are not checked since other migrations may be running.
+    if (disp->sockfile)
+    {
+        // Remove socket file
+        unlink(disp->sockfile);
+
+        // Remove description.txt
+        disp->sockfile[strlen(disp->sockfile) - 12] = '\0'; // remove "display.sock"
+        strcpy(path, disp->sockfile);
+        strcat(path, "description.txt");
+        unlink(path);
+
+        // Remove parent dir (if possible)
+        rmdir(disp->sockfile);
+        rmdir("/tmp/cloudmig/");
+
+        free(disp->sockfile);
+        disp->sockfile = NULL;
+    }
+
+    free(disp);
+}
+
+struct cldmig_display*
+display_create(struct cloudmig_ctx *ctx, char *src, char *dst)
+{
+    struct cldmig_display *ret = NULL;
+    struct cldmig_display *disp = NULL;
     char    pid_str[32];
     char    desc_file[64];
     // By using the size of sun_path, we seek to avoid buffer overflows in file
@@ -116,200 +274,87 @@ setup_var_pid_and_sock(char *src, char *dst)
     struct sockaddr_un t;
     char    sockfile[sizeof(t.sun_path)];
 
-    // Create the directory
+    disp = calloc(1, sizeof(*disp));
+    if (disp == NULL)
+    {
+        PRINTERR("Could not allocate display data.\n");
+        goto end;
+    }
+    disp->ctx = ctx;
+    disp->thread = -1;
+    disp->stop = 1;
+    disp->accept_sock = -1;
+    disp->lock_inited = 0;
+
+    if ((size_t)sprintf(pid_str, "/tmp/cloudmig/%hi", getpid()) > sizeof(pid_str))
+    {
+        PRINTERR("Could not compute rundir path: %s", strerror(errno));
+        goto end;
+    }
+
+    if ((size_t)snprintf(sockfile, sizeof(sockfile),
+                         "%s/display.sock", pid_str) > sizeof(sockfile))
+    {
+        PRINTERR("Could not compute display socket path: %s", strerror(errno));
+        goto end;
+    }
+
+    disp->sockfile = strdup(sockfile);
+    if (disp->sockfile == NULL)
+        goto end;
+
+    // Create the directories
     if (mkdir("/tmp/cloudmig", 0755) == -1)
     {
         if (errno != EEXIST)
         {
             PRINTERR("Could not create /tmp/cloudmig directory : %s.\n",
                      strerror(errno));
-            return (EXIT_FAILURE);
+            goto end;
         }
     }
 
-    sprintf(pid_str, "/tmp/cloudmig/%hi", getpid());
     if (mkdir(pid_str, 0755) == -1)
     {
         PRINTERR("Could not create %s directory : %s.\n",
                  pid_str, strerror(errno));
-        if (rmdir("/tmp/cloudmig") == -1)
-        {
-            if (errno != ENOTEMPTY)
-            {
-                PRINTERR("Could not remove /tmp/cloudmig directory : %s. \
-                         Please remove it manually.\n",
-                         strerror(errno));
-            }
-        }
-        return (EXIT_FAILURE);
+        goto end;
     }
+
 
     snprintf(desc_file, sizeof(desc_file), "%s/description.txt", pid_str);
     FILE* desc = fopen(desc_file, "w");
     if (desc == NULL)
-        return EXIT_FAILURE;
+        goto end;
     fprintf(desc, "%s to %s", src, dst);
     fclose(desc);
 
-    snprintf(sockfile, sizeof(sockfile), "%s/display.sock",
-             pid_str);
-    // First, save the file name into a global string ptr.
-    unique_sockfile = strdup(sockfile);
-    if (unique_sockfile == NULL)
-        return EXIT_FAILURE;
+    disp->accept_sock = _display_create_accept_socket(sockfile);
+    if (disp->accept_sock == -1)
+        goto end;
 
-    unique_accept_sock = create_log_socket(sockfile);
-    if (unique_accept_sock == -1)
-        return (EXIT_FAILURE);
-
-    return (EXIT_SUCCESS);
-}
-
-
-static void
-accept_client(struct cloudmig_ctx *ctx)
-{
-    struct sockaddr_un      client_addr;
-    socklen_t               client_socklen = sizeof(client_addr);
-
-    int client_sock = accept(unique_accept_sock,
-                             (struct sockaddr*)&client_addr,
-                             &client_socklen);
-    if (client_sock == -1)
+    if (pthread_mutex_init(&disp->lock, NULL) == -1)
     {
-        PRINTERR("%s: Could not accept viewer connection : %s.\n",
-                 __FUNCTION__, strerror);
-        return ;
+        PRINTERR("Could not initialize display mutex.\n");
+        goto end;
+    }
+    disp->lock_inited = 1;
+
+    disp->stop = 0;
+    if (pthread_create(&disp->thread, NULL,
+                       (void*(*)(void*))_display_main_loop,
+                       disp) == -1)
+    {
+        PRINTERR("Could not start display thread.\n");
+        goto end;
     }
 
-    // If there's already a client, refuse, even thought it should not
-    // have happened... (a .lock file should be present)
-    if (ctx->viewer_fd != -1)
-    {
-        shutdown(client_sock, SHUT_RDWR);
-        close(client_sock);
-        return ;
-    }
+    ret = disp;
+    disp = NULL;
 
-    // Store it in the ctx for ease of transmission
-    ctx->viewer_fd = client_sock;
+end:
+    if (disp)
+        display_destroy(disp);
+
+    return ret;
 }
-
-
-void
-cloudmig_check_for_clients(struct cloudmig_ctx *ctx)
-{
-    struct timeval  timeout = {0, 0};
-    fd_set          rfds;
-
-    FD_ZERO(&rfds);
-    FD_SET(unique_accept_sock, &rfds);
-
-retry:
-    if (select(unique_accept_sock + 1, &rfds, NULL, NULL, &timeout) == -1)
-    {
-        if (errno == EINTR)
-            goto retry;
-        PRINTERR("%s: Could not select on listening socket : %s.\n",
-                 __FUNCTION__, strerror(errno));
-        return ;
-    }
-
-    if (FD_ISSET(unique_accept_sock, &rfds))
-        accept_client(ctx);
-}
-
-
-void
-cloudmig_update_client(struct cloudmig_ctx *ctx)
-{
-    static struct timeval       lastupdate = {0, 0};
-    struct timeval              tlimit = {0, 0};
-    char                        head;
-
-    // No use doing anything if there's no fd for it...
-    if (ctx->viewer_fd == -1)
-        return ;
-
-    gettimeofday(&tlimit, NULL);
-    // Update if :
-    //  - transfer fully done
-    //  OR
-    //  - last update was more than 1/4 sec ago
-    if (status_digest_get(ctx->status->digest, DIGEST_DONE_BYTES)
-            != status_digest_get(ctx->status->digest, DIGEST_BYTES)
-        && (((double)tlimit.tv_sec * 1000.
-             + (double)tlimit.tv_usec/1000.)
-            - ((double)lastupdate.tv_sec * 1000.
-               + (double)lastupdate.tv_usec/1000.)) < 250)
-        return ;
-    lastupdate = tlimit; 
-
-    /*
-     * First, send the global information on the migration :
-     */
-    head = GLOBAL_INFO;
-    // First write the header for viewer client
-    if (send(ctx->viewer_fd, &head, 1, MSG_NOSIGNAL) == -1)
-        goto unset_viewer_fd;
-
-    // Then write the associated data
-    // (unix socket, so don't care about endianness)
-    if (send(ctx->viewer_fd, ctx->status->digest,
-              sizeof(*ctx->status->digest), MSG_NOSIGNAL) == -1)
-        goto unset_viewer_fd;
-
-    /*
-     * Next, send each thread info :
-     */
-    int threadid = -1;
-    // Set the limit for removal of infolist items.
-    tlimit.tv_sec -= 3;
-
-    do
-    {
-        ++threadid;
-        // TODO : Will have a loop here to iterate on all threads
-        // XXX Lock the thread's info
-        remove_old_items(
-            &tlimit,
-            (struct cldmig_transf**)&(ctx->tinfos[threadid].infolist)
-        );
-
-        struct cldmig_thread_info tinfo = {
-            threadid,
-            ctx->tinfos[threadid].fsize,
-            ctx->tinfos[threadid].fdone,
-            make_list_transfer_rate(
-                (struct cldmig_transf*)(ctx->tinfos[threadid].infolist)
-            ),
-            strlen(ctx->tinfos[threadid].fpath) + 1
-        };
-
-        // Write the struct
-        head = THREAD_INFO;
-        if (send(ctx->viewer_fd, &head, 1, MSG_NOSIGNAL) == -1)
-            goto unset_viewer_fd;
-        if (send(ctx->viewer_fd, &tinfo, sizeof(tinfo), MSG_NOSIGNAL) == -1)
-            goto unset_viewer_fd;
-        // Write the filename
-        if (send(ctx->viewer_fd,
-              ctx->tinfos[threadid].fpath,
-              tinfo.namlen, MSG_NOSIGNAL) == -1)
-            goto unset_viewer_fd;
-        // We're done with this thread !
-        // XXX Unlock the thread's info
-    } while ((threadid + 1) < ctx->options.nb_threads);
-
-    return ;
-
-unset_viewer_fd:
-    if (errno == EPIPE)
-    {
-        close(ctx->viewer_fd);
-        ctx->viewer_fd = -1;
-    }
-}
-
-
-

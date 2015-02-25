@@ -34,6 +34,7 @@
 #include "options.h"
 #include "status_store.h"
 #include "status_digest.h"
+#include "display.h"
 
 
 enum cloudmig_loglevel  gl_loglevel = INFO_LVL;
@@ -160,8 +161,9 @@ int main(int argc, char* argv[])
             goto failure;
         }
     }
-    if (setup_var_pid_and_sock(src_hostname,
-                               dst_hostname) == EXIT_FAILURE)
+
+    ctx.display = display_create(&ctx, src_hostname, dst_hostname);
+    if (ctx.display == NULL)
         goto failure;
 
     ctx.status = status_store_new();
@@ -223,8 +225,8 @@ failure:
         unlink(ctx.config.src_profile);
         unlink(ctx.config.dst_profile);
     }
-    if (ctx.src_ctx)
-        unsetup_var_pid_and_sock();
+    if (ctx.display)
+        display_destroy(ctx.display);
 
     if (src_hostname)
 	free(src_hostname);

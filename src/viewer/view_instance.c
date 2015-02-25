@@ -73,9 +73,55 @@ connect_to_unix_socket(char *filepath)
     return sockfd;
 }
 
+#include <stdarg.h>
+static void
+add_msg(struct message **msgs, char *format, ...)
+{
+    va_list         ap;
+    struct message  *msg = NULL;
+    struct message  *tmp = NULL;
+
+    msg = calloc(1, sizeof(*msg));
+    if (msg == NULL)
+        return ;
+
+    gettimeofday(&msg->tv, NULL);
+
+    /*
+     * Free entries older than 1 secs.
+     */
+    tmp = *msgs;
+    while (tmp
+           && (tmp->tv.tv_sec + 1 < msg->tv.tv_sec
+               || (tmp->tv.tv_sec + 1 == msg->tv.tv_sec
+                   && tmp->tv.tv_usec < msg->tv.tv_usec)))
+    {
+        *msgs = (*msgs)->next;
+        free(tmp->msg);
+        free(tmp);
+        tmp = *msgs;
+    }
+
+    va_start(ap, format);
+    msg->type = TEST;
+    vasprintf(&msg->msg, format, ap);
+    va_end(ap);
+
+    if (*msgs)
+    {
+        struct message *last = *msgs;
+        while (last->next != NULL)
+            last = last->next;
+        last->next = msg;
+    }
+    else
+        *msgs = msg;
+}
+
 static int
 state_machine_read(int sockfd, struct cldmig_global_info *ginfo,
-                   struct thread_info **thr_data, uint32_t *thr_nb)
+                   struct thread_info **thr_data, uint32_t *thr_nb,
+                   struct message **msgs)
 {
     int     ret = EXIT_FAILURE;
     char    type;
@@ -117,25 +163,34 @@ state_machine_read(int sockfd, struct cldmig_global_info *ginfo,
                 ret = EXIT_FAILURE;
                 break ;
             }
-            (*thr_data)[thr_id].name = calloc((*thr_data)[thr_id].fnamlen,
+            (*thr_data)[thr_id].name = calloc((*thr_data)[thr_id].fnamlen + 1,
                                               sizeof(char));
             if ((*thr_data)[thr_id].name == NULL)
             {
                 ret = EXIT_FAILURE;
                 break ;
             }
-            ret = read(sockfd, (*thr_data)[thr_id].name,
-                       (*thr_data)[thr_id].fnamlen);
+            ret = read(sockfd, (*thr_data)[thr_id].name, (*thr_data)[thr_id].fnamlen);
             if (ret == -1)
             {
                 ret = EXIT_FAILURE;
                 break ;
             }
+
+            // Useful for debugging
+            /*
+            add_msg(msgs, "Read thread: name=%s formatted=%.*s\n",
+                    (*thr_data)[thr_id].name,
+                    (*thr_data)[thr_id].fnamlen,
+                    (*thr_data)[thr_id].name);
+            */
+
             ret = EXIT_SUCCESS;
         }
         break ;
     case MSG:
         {
+            add_msg(msgs, "[DEBUG] Received message");
             ret = EXIT_SUCCESS;
         }
         break ;
@@ -186,7 +241,7 @@ display_loop(int sockfd)
         // Network processing
         if (FD_ISSET(sockfd, &rfds))
         {
-            state_machine_read(sockfd, &ginfos, &thr_data, &nb_threads);
+            state_machine_read(sockfd, &ginfos, &thr_data, &nb_threads, &msgs);
             if (display(&ginfos, thr_data, nb_threads, msgs) == EXIT_FAILURE)
                 goto err;
         }

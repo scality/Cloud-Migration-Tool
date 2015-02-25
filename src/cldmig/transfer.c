@@ -32,6 +32,7 @@
 
 #include "status_store.h"
 #include "status_digest.h"
+#include "display.h"
 
 static int
 migrate_with_retries(struct cldmig_info *tinfo,
@@ -72,7 +73,10 @@ migrate_object(struct cldmig_info *tinfo,
     cloudmig_log(DEBUG_LVL, "[Migrating] : starting migration of file %s\n",
                  filestate->obj_path);
 
-    /* Initialize the thread's internal data */
+    /*
+     * Set the thread's internal data to the current file
+     * (will stay as is until next file is set)
+     */
     {
         pthread_mutex_lock(&tinfo->lock);
         tinfo->fsize = filestate->fixed.size;
@@ -99,20 +103,12 @@ migrate_object(struct cldmig_info *tinfo,
         goto ret;
 
     status_store_entry_complete(tinfo->ctx, filestate);
+    display_trigger_update(tinfo->ctx->display);
 
     cloudmig_log(INFO_LVL,
     "[Migrating] : file %s migrated.\n", filestate->obj_path);
 
 ret:
-    /* Clean the thread's internal data */
-    {
-        pthread_mutex_lock(&tinfo->lock);
-        tinfo->fsize = 0;
-        tinfo->fdone = 0;
-        tinfo->fpath = NULL;
-        clear_list(&tinfo->infolist);
-        pthread_mutex_unlock(&tinfo->lock);
-    }
 
     return (failures == 3);
 }
@@ -143,6 +139,14 @@ migrate_worker_loop(struct cldmig_info *tinfo)
         status_store_release_entry(&cur_filestate);
         pthread_mutex_lock(&tinfo->lock);
     }
+
+    clear_list(&tinfo->infolist);
+
+    // Reset thread info for viewer to see inactive thread.
+    tinfo->fsize = 0;
+    tinfo->fdone = 0;
+    tinfo->fpath = NULL;
+
     pthread_mutex_unlock(&tinfo->lock);
 
     /*

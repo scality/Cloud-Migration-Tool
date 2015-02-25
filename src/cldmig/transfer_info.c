@@ -59,12 +59,12 @@ new_transf_info(struct timeval *tv, uint32_t q)
 
 
 /*
- * Let's do a sorted insert so that : timeA > timeB > timeC ...
+ * Let's do a sorted insert so that first is youngest and last oldest
  */
 void
 insert_in_list(struct cldmig_transf **list, struct cldmig_transf *item)
 {
-    struct cldmig_transf* cur;
+    struct cldmig_transf* cur = NULL;
 
     if (*list == NULL)
     {
@@ -96,29 +96,30 @@ remove_old_items(struct timeval *limit, struct cldmig_transf **list)
         return ;
 
     cur = *list;
-    // Search the first one to be deleted since it's sorted...
-    while (cur->next != NULL
-           && !time_is_lesser(&cur->next->t, limit))
-        cur = cur->next;
-
-    // If there's only one item...
-    if (cur == *list)
+    if (time_is_lesser(&cur->t, limit))
+    {
         *list = NULL;
-    // Remove the rest...
-    while (cur && time_is_lesser(&cur->t, limit))
+    }
+    else
+    {
+        // Search the first one to be deleted since it's sorted
+        while (cur->next != NULL
+               && !time_is_lesser(&cur->next->t, limit))
+            cur = cur->next;
+
+        // Break the linked list's chain
+        tmp = cur;
+        cur = cur->next;
+        if (tmp->next)
+            tmp->next = NULL;
+    }
+
+    // Now, free the elements removed.
+    while (cur)
     {
         tmp = cur;
         cur = tmp->next;
         free(tmp);
-    }
-
-    /*
-     * Now if the first one was to be deleted, it should be the only one left :
-     */
-    if (*list && time_is_lesser(&(*list)->t, limit))
-    {
-        free(*list);
-        *list = NULL;
     }
 }
 
@@ -126,24 +127,22 @@ uint32_t
 make_list_transfer_rate(struct cldmig_transf *list)
 {
     struct cldmig_transf    *cur = list;
-    float rate = 0.0;
-    float time;
+    double rate = 0.0;
+    double time = 0.0;
 
     if (list == NULL)
         return 0;
 
-    // First sum up all the data transfered.
+    // sum all the data transfered.
     while (cur->next != NULL)
     {
         rate += cur->q;
         cur = cur->next;
     }
 
-    // First get the time elapsed between first and last
-    time = list->t.tv_sec;
-    time += (float)(list->t.tv_usec) * .000001;
-    time -= (float)(cur->t.tv_usec) * .000001;
-    time -= cur->t.tv_sec;
+    // get the time elapsed between first and last
+    time  = (double)list->t.tv_sec + (double)(list->t.tv_usec) * .000001f;
+    time -= (double)cur->t.tv_sec  + (double)(cur->t.tv_usec)  * .000001f;
 
     // Then compute, and we get the byterate per second :)
     rate /= time;

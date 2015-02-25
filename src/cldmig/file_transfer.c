@@ -37,6 +37,30 @@
 #include "status_store.h"
 #include "status_digest.h"
 
+/*
+ * This function creates an element for the byte rate computing list
+ * and inserts it in the info list.
+ */
+static void
+_add_transfer_info(struct cldmig_info *tinfo, size_t len)
+{
+    struct timeval          tv;
+    struct cldmig_transf    *e = NULL;
+
+    pthread_mutex_lock(&tinfo->lock);
+
+    tinfo->fdone += len;
+    gettimeofday(&tv, NULL);
+    e = new_transf_info(&tv, len);
+    if (e == NULL)
+        PRINTERR("Could not update ETA block list, ETA might become erroneous");
+    else
+        insert_in_list(&tinfo->infolist, e);
+
+    pthread_mutex_unlock(&tinfo->lock);
+}
+
+
 static int
 create_parent_dirs(struct cloudmig_ctx *ctx,
                    struct file_transfer_state *filestate)
@@ -171,6 +195,9 @@ create_directory(struct cldmig_info *tinfo,
         goto end;
     }
 
+    // Update info list for viewer's ETA
+    _add_transfer_info(tinfo, 0);
+
     ret = EXIT_SUCCESS;
 
 end:
@@ -248,7 +275,6 @@ create_symlink(struct cldmig_info *tinfo,
         ret = EXIT_FAILURE;
         goto end;
     }
-    cloudmig_log(ERR_LVL, "[Migrating] Symlink -> %s -> %s\n", filestate->obj_path, link_target);
 
     dplret = dpl_chdir(ctx->dest_ctx, link_dir);
     if (dplret != DPL_SUCCESS)
@@ -280,6 +306,8 @@ create_symlink(struct cldmig_info *tinfo,
         goto end;
     }
 
+    // Update info list for viewer's ETA
+    _add_transfer_info(tinfo, 0);
 
     status_digest_add(ctx->status->digest, DIGEST_DONE_BYTES, filestate->fixed.size);
 
@@ -312,9 +340,6 @@ transfer_data_chunk(struct cldmig_info *tinfo,
     struct json_object      *wstatus = NULL;
     char                    *buffer = NULL;
     unsigned int            buflen = 0;
-    // For ETA data
-    struct cldmig_transf    *e;
-    struct timeval          tv;
 
     cloudmig_log(DEBUG_LVL,
                  "[Migrating] %s : Transfering data chunk of %lu bytes.\n",
@@ -339,17 +364,8 @@ transfer_data_chunk(struct cldmig_info *tinfo,
         goto end;
     }
 
-    /*
-     * Here, create an element for the byte rate computing list
-     * and insert it in the right info list.
-     */
-    tinfo->fdone += buflen;
-    gettimeofday(&tv, NULL);
-    e = new_transf_info(&tv, buflen);
-    if (e == NULL)
-        PRINTERR("Could not update ETA block list, ETA might become erroneous");
-    else
-        insert_in_list(&tinfo->infolist, e);
+    // Update info list for viewer's ETA
+    _add_transfer_info(tinfo, buflen);
 
     if (filestate->rstatus)
         json_object_put(filestate->rstatus);
@@ -509,6 +525,9 @@ transfer_whole(struct cldmig_info *tinfo,
         ret = EXIT_FAILURE;
         goto end;
     }
+
+    // Update info list for viewer's ETA
+    _add_transfer_info(tinfo, buflen);
 
     status_digest_add(ctx->status->digest, DIGEST_DONE_BYTES, filestate->fixed.size);
 

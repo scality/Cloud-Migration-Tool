@@ -27,6 +27,9 @@
 
 INCLUDE_DIRECTORIES(${DROPLET_INCLUDE_DIR}
                     ${LIBXML2_INCLUDE_DIR}
+                    /usr/include/json
+                    ${CLOUDMIG_SOURCE_DIR}/inc/cloudmig
+                    ${CLOUDMIG_BINARY_DIR}/inc/cloudmig
 )
 
 SET(CLOUDMIG_SRC    main.c
@@ -36,6 +39,7 @@ SET(CLOUDMIG_SRC    main.c
                     status_bucket.c
                     delete_files.c
                     display.c
+                    viewer.c
                     file_acl.c
                     file_transfer.c
                     load_config.c

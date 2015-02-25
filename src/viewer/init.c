@@ -86,13 +86,13 @@ viewer_init_colors(void)
     if (init_color(lightred_idx, 900, 200, 200) == ERR)
     {
         fprintf(stderr,
-            "cloudmig-view: Falling back to YELLOW instead of darkyellow.\n");
+            "cloudmig-view: Falling back to RED instead of lightred.\n");
         lightred_idx = COLOR_RED;
     }
     if (init_color(lightgreen_idx, 0, 1000, 0) == ERR)
     {
         fprintf(stderr,
-            "cloudmig-view: Falling back to YELLOW instead of darkyellow.\n");
+            "cloudmig-view: Falling back to GREEN instead of lightgreen.\n");
         lightgreen_idx = COLOR_GREEN;
     }
 
