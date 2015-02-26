@@ -217,71 +217,20 @@ create_symlink(struct cldmig_info *tinfo,
     dpl_status_t            dplret;
     struct cloudmig_ctx     *ctx = tinfo->ctx;
     char                    *link_target = NULL;
-    char                    *tmppath = NULL;
-    char                    *link_dir = NULL;
-    char                    *dstroot = NULL;
-    char                    *buckend = NULL;
-    int                     bucklen = 0;
 
     cloudmig_log(DEBUG_LVL, "[Migrating] Creating symlink %s\n",
                  filestate->obj_path);
 
-    tmppath = strdup(filestate->obj_path);
-    if (tmppath == NULL)
     {
-        PRINTERR("[Migrating] "
-                 "Could not dup the filepath. Out Of Memory.\n");
-        ret = EXIT_FAILURE;
-        goto end;
+
     }
 
-    link_dir = dirname(tmppath);
-    buckend = strchr(filestate->obj_path, ':');
-    bucklen = 0;
-    if (buckend)
-        bucklen = (int)(intptr_t)(buckend - filestate->obj_path);
-    dstroot = calloc(bucklen + 3 /* for the ending ":/" */, sizeof(*dstroot));
-    if (dstroot == NULL)
-    {
-        PRINTERR("[Migrating] "
-                 "Could not dup the filepath. Out Of Memory.\n");
-        ret = EXIT_FAILURE;
-        goto end;
-    }
-
-    ret = sprintf(dstroot, "%.*s:/", bucklen ? bucklen : 0, filestate->obj_path);
-    if (ret < bucklen + 2)
-    {
-        PRINTERR("[Migrating] Could not compute the root path\n");
-        ret = EXIT_FAILURE;
-        goto end;
-    }
-    
-    /*
-     * We need to:
-     *
-     * Read source link
-     *
-     * chdir to link parent dir
-     * Create dest link
-     * chdir back to "root" dir
-     */
     dplret = dpl_readlink(ctx->src_ctx, filestate->obj_path, &link_target);
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("[Migrating] "
                  "Could not read target of symlink %s : %s.\n",
                  filestate->obj_path, dpl_status_str(dplret));
-        ret = EXIT_FAILURE;
-        goto end;
-    }
-
-    dplret = dpl_chdir(ctx->dest_ctx, link_dir);
-    if (dplret != DPL_SUCCESS)
-    {
-        PRINTERR("[Migrating] "
-                 "Could not chdir to %s : %s.\n",
-                 link_dir, dpl_status_str(dplret));
         ret = EXIT_FAILURE;
         goto end;
     }
@@ -296,16 +245,6 @@ create_symlink(struct cldmig_info *tinfo,
         goto end;
     }
 
-    dplret = dpl_chdir(ctx->dest_ctx, dstroot);
-    if (dplret != DPL_SUCCESS)
-    {
-        PRINTERR("[Migrating] "
-                 "Could not chdir to %s : %s.\n",
-                 link_dir, dpl_status_str(dplret));
-        ret = EXIT_FAILURE;
-        goto end;
-    }
-
     // Update info list for viewer's ETA
     _add_transfer_info(tinfo, 0);
 
@@ -316,10 +255,6 @@ create_symlink(struct cldmig_info *tinfo,
 end:
     if (link_target)
         free(link_target);
-    if (tmppath)
-        free(tmppath);
-    if (dstroot)
-        free(dstroot);
 
     return ret;
 }
@@ -514,6 +449,8 @@ transfer_whole(struct cldmig_info *tinfo,
                       &buffer, &buflen, &metadata, &sysmd);
     if (dplret != DPL_SUCCESS)
     {
+        PRINTERR("[Migrating] Could not fget source file %s: %s\n",
+                 filestate->obj_path, dpl_status_str(dplret));
         ret = EXIT_FAILURE;
         goto end;
     }
@@ -522,6 +459,8 @@ transfer_whole(struct cldmig_info *tinfo,
                       metadata, &sysmd, buffer, buflen);
     if (dplret != DPL_SUCCESS)
     {
+        PRINTERR("[Migrating] Could not fput destination file %s: %s\n",
+                 filestate->obj_path, dpl_status_str(dplret));
         ret = EXIT_FAILURE;
         goto end;
     }
