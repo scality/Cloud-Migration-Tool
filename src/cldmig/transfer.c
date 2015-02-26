@@ -73,18 +73,6 @@ migrate_object(struct cldmig_info *tinfo,
     cloudmig_log(DEBUG_LVL, "[Migrating] : starting migration of file %s\n",
                  filestate->obj_path);
 
-    /*
-     * Set the thread's internal data to the current file
-     * (will stay as is until next file is set)
-     */
-    {
-        pthread_mutex_lock(&tinfo->lock);
-        tinfo->fsize = filestate->fixed.size;
-        tinfo->fdone = filestate->fixed.offset;
-        tinfo->fpath = filestate->obj_path;
-        pthread_mutex_unlock(&tinfo->lock);
-    }
-
     switch (filestate->fixed.type)
     {
     case DPL_FTYPE_DIR:
@@ -132,6 +120,14 @@ migrate_worker_loop(struct cldmig_info *tinfo)
     while (tinfo->stop == false
            && (found = status_store_next_incomplete_entry(tinfo->ctx, &cur_filestate)) == 1)
     {
+        /*
+         * Set the thread's internal data to the current file while we're locked
+         * (will stay as is until next file is set)
+         */
+        tinfo->fsize = cur_filestate.fixed.size;
+        tinfo->fdone = cur_filestate.fixed.offset;
+        tinfo->fpath = cur_filestate.obj_path;
+
         pthread_mutex_unlock(&tinfo->lock);
         if (migrate_object(tinfo, &cur_filestate))
             ++nbfailures;
