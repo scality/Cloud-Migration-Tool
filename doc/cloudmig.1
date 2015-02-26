@@ -40,64 +40,37 @@ cloudmig
 
 .P
 .B
-cloudmig
-[
-    \fIsrc_profile_name\fP
-    |
-    \fB\-\-src\-profile\fP=\fIsrc_profile\fP
-    |
-    \fB\-s\fP \fIsrc_profile\fP
-]
+cloudmig [ options ] \fIsource_profile_name\fP \fIdestination_profile_name\fP [ \fIstatus_profile_name\fP ]
 .br
-[
-    \fIdst_profile_name\fP
-    |
-    \fB\-\-dst\-profile\fP=\fIdst_profile\fP
-    |
-    \fB\-d\fP \fIdst_profile\fP
-]
-.br
-[
-    \fIstatus_profile_name\fP
-    |
-    \fB\-\-status\-profile\fP=\fIstatus_profile\fP
-    |
-    \fB\-S\fP \fIstatus_profile\fP
-]
-.br
-[ \fB\-\-config\fP=\fIconfig_file\fP | \fB\-c\fP \fIconfig_file\fP ]
-.br
-[
-    \fB\-\-buckets\fP=\fIbuckets_associations\fP
-    |
-    \fB\-b\fP \fIbuckets_associations\fP
-]
-.br
-[ \fB\-\-block-size\fP=\fIblock_size\fP | \fB\-B\fP \fIblock_size\fP]
-.br
-[ \fB\-\-force\-resume\fP | \fB\-r\fP ]
+[ \fB\-\-help\fP | \fB\-h\fP ]
 .br
 [ \fB\-\-delete\-source\fP ]
 .br
 [ \fB\-\-background\fP ]
 .br
-[ \fB\-\-output\fP=\fIlog_file\fP | \fB\-o\fP \fIlogfile\fP ]
+[ \fB\-\-create\-directories\fP ]
 .br
-[ \fB\-\-verbose\fP=[
-    \fBdebug\fP
-    | \fBinfo\fP
-    | \fBwarn\fP
-    | \fBstatus\fP
-    | \fBerror\fP ]
- | \fB\-v\fP [
-    \fBdebug\fP
-    | \fBinfo\fP
-    | \fBwarn\fP
-    | \fBstatus\fP
-    | \fBerror\fP ]
-]
+[ \fB\-\-force\-resume\fP | \fB\-r\fP ]
+.br
+[ \fB\-\-worker\-threads\fP=\fInb_threads\fP | \fB\-w\fP \fInb_threads\fP]
+.br
+[ \fB\-\-block-size\fP=\fIblock_size\fP | \fB\-B\fP \fIblock_size\fP]
+.br
+[ \fB\-\-buckets\fP=\fIbuckets_associations\fP | \fB\-b\fP \fIbuckets_associations\fP ]
+.br
+[ \fB\-\-config\fP=\fIconfig_file\fP | \fB\-c\fP \fIconfig_file\fP ]
+.br
+[ \fB\-\-verbose\fP=\fBdebug\fP|\fBinfo\fP|\fBwarn\fP|\fBstatus\fP|\fBerror\fP | \fB\-v\fP \fBdebug\fP|\fBinfo\fP|\fBwarn\fP|\fBstatus\fP|\fBerror\fP ]
 .br
 [ \fB\-\-droplet\-trace\fP=\fInihsrcdfb\fP | \fB\-t\fP \fInihsrcdfb\fP]
+.br
+[ \fB\-\-output\fP=\fIlog_file\fP | \fB\-o\fP \fIlogfile\fP ]
+.br
+[ \fB\-\-src\-profile\fP=\fIsrc_profile\fP | \fB\-s\fP \fIsrc_profile\fP ]
+.br
+[ \fB\-\-dst\-profile\fP=\fIdst_profile\fP | \fB\-d\fP \fIdst_profile\fP ]
+.br
+[ \fB\-\-status\-profile\fP=\fIstatus_profile\fP | \fB\-S\fP \fIstatus_profile\fP ]
 
 
 
@@ -110,10 +83,11 @@ data. Thus, the supported services depend on the services supported by the
 library (see http://github.com/scality/Droplet/ for more information).
 
 .P
-The source's profile name and destination's profile name are the names of the
+The source, destination and status profile names are the names of the
 droplet profiles located in the default droplet directory (~/.droplet by
 default). Those are mandatory if no configuration file is given to the tool
-(through the --config option).
+(through the --config option). Otherwise, they can all be configured by
+command-line option or through the configuration file.
 
 .P
 The program first connects to the source account, and creates a status bucket
@@ -129,32 +103,6 @@ Here is an exhaustive list of the options available for the cloud migration
 tool. Almost all of them have an equivalent in the configuration file. This
 will be described in a latter section.
 
-\fB\-s\fP \fI src_profile\fP
-.br
-\fB\-\-src\-profile\fP=\fIsrc_profile\fP
-.RS
-Gives the path of the source profile to the program instead of using the
-default droplet directory with a profile name.
-.RE
-
-\fB\-d\fP \fIdst_profile\fP
-.br
-\fB\-\-dst\-profile\fP=\fIdst_profile\fP
-.RS
-Gives the path of the destination profile to the program instead of using the
-default droplet directory with a profile name.
-.RE
-
-\fB\-c\fP \fIconfig_file\fP
-.br
-\fB\-\-config\fP=\fIconfig_file\fP
-.RS
-Uses a configuration file containing all settings for the tools (including
-migration profiles). Every setting inside the configuration file will override
-the settings of the command-line arguments. The source and destination profiles
-\fBmust\fP be defined inside the configuration file if this option is used.
-.RE
-
 \fB\-b\fP \fIbuckets_associations\fP
 .br
 \fB\-\-buckets\fP=\fIbuckets_associations\fP
@@ -167,29 +115,26 @@ The tool will therefore only transfer the given buckets into their given
 destination. A destination " must " not be an empty string.
 .RE
 
-\fB\-r\fP, \fB\-\-force\-resume\fP
+\fB\-c\fP \fIconfig_file\fP
+.br
+\fB\-\-config\fP=\fIconfig_file\fP
 .RS
-Allows the tool to resume a migration that was interrupted before (with the
-same source and destination). By default, the tool aborts and prints a message
-about the ongoing migration.
+Uses a configuration file containing all settings for the tools (including
+migration profiles). Every setting inside the configuration file will override
+the settings of the command-line arguments. The source and destination profiles
+\fBmust\fP be defined inside the configuration file if this option is used.
 .RE
 
-\fB\-\-delete\-source\fP
+\fB\-d\fP \fIdst_profile\fP
+.br
+\fB\-\-dst\-profile\fP=\fIdst_profile\fP
 .RS
-Deletes the source's migrated content at the end of a successful migration. By
-default, the tool does not delete the migrated data nor the status bucket. This
-options allows to delete both at the end of the migration.
-.RE
-
-\fB\-\-background\fP
-.RS
-Enables the tool's background mode. This means that nothing will be logged by
-default. The tool will run in the background, and give back the control over
-the shell to the user. See the \-\-output option in order to see how to setup
-the logging file.
+Gives the path of the destination profile to the program instead of using the
+default droplet directory with a profile name.
 .RE
 
 \fB\-o\fP \fIlog_file\fP
+.br
 \fB\-\-output\fP=\fIlog_file\fP
 .RS
 Gives a file to use for the logging. By default, everything is logged on the
@@ -197,31 +142,25 @@ standard error output. When using this option, only the ERRORS are still logged
 in the standard error output, and everything is logged into the file.
 .RE
 
-\fB\-v\fP \fIverbose_level\fP
-\fB\-\-verbose\fP=\fIverbose_level\fP
+\fB\-r\fP
+.br
+\fB\-\-force\-resume\fP
 .RS
-Choose the verbosity of the migration tool. By default, the tool outputs
-information about the files being transfered, as well as the warnings, errors,
-and the end of migration status report. This report consists on telling some
-stats about the migration : number of objects transfered during the session
-(without interruption), quantity of data transfered, elapsed time since the
-beginning of the migration and average transfer speed.
-.br
-Available verbosity level are :
-.br
-    \fBdebug\fP: everything but the library's debugging traces is logged
-.br
-    \fBinfo\fP: default behavior.
-.br
-    \fBwarn\fP: outputs warnings, end status report, and errors.
-.br
-    \fBstatus\fP: outputs errors and end status report.
-.br
-    \fBerror\fP: outputs only the errors of the tool.
+Allows the tool to resume a migration that was interrupted before (with the
+same source and destination). By default, the tool aborts and prints a message
+about the ongoing migration.
 .RE
 
+\fB\-s\fP \fI src_profile\fP
+.br
+\fB\-\-src\-profile\fP=\fIsrc_profile\fP
+.RS
+Gives the path of the source profile to the program instead of using the
+default droplet directory with a profile name.
+.RE
 
-\fB\-t\fP \fIoption_string\fP,
+\fB\-t\fP \fIoption_string\fP
+.br
 \fB\-\-droplet\-trace\fP=\fIoption_string\fP
 .RS
 Enables the Droplet libary's traces. This is mainly an option for debugging
@@ -247,7 +186,55 @@ if one encounters some issues with the tool. Each character of the
     \fBb\fP: droplet backend traces.
 .RE
 
-\fB\-\-create\-directories
+\fB\-v\fP \fIverbose_level\fP
+.br
+\fB\-\-verbose\fP=\fIverbose_level\fP
+.RS
+Choose the verbosity of the migration tool. By default, the tool outputs
+information about the files being transfered, as well as the warnings, errors,
+and the end of migration status report. This report consists on telling some
+stats about the migration : number of objects transfered during the session
+(without interruption), quantity of data transfered, elapsed time since the
+beginning of the migration and average transfer speed.
+.br
+Available verbosity level are :
+.br
+    \fBdebug\fP: everything but the library's debugging traces is logged
+.br
+    \fBinfo\fP: default behavior.
+.br
+    \fBwarn\fP: outputs warnings, end status report, and errors.
+.br
+    \fBstatus\fP: outputs errors and end status report.
+.br
+    \fBerror\fP: outputs only the errors of the tool.
+.RE
+
+\fB\-w\fP \fInb_threads\fP
+.br
+\fB\-\-worker-threads\fP=\fInb_threads\fP
+.RS
+Choose the number of workers threads the migration tool can use to transfer
+the data from the source to the destination. By default, only one thread is
+used for the transfer.
+.RE
+
+\fB\-\-delete\-source\fP
+.RS
+Deletes the source's migrated content at the end of a successful migration. By
+default, the tool does not delete the migrated data nor the status bucket. This
+options allows to delete both at the end of the migration.
+.RE
+
+\fB\-\-background\fP
+.RS
+Enables the tool's background mode. This means that nothing will be logged by
+default. The tool will run in the background, and give back the control over
+the shell to the user. See the \-\-output option in order to see how to setup
+the logging file.
+.RE
+
+\fB\-\-create\-directories\fP
 .RS
 Enables the automatic creation of virtual directories inside the destination
 storage account. Each one of those virtual directories is actually an empty
