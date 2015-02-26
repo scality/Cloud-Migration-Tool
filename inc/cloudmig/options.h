@@ -43,7 +43,7 @@ struct cloudmig_options
 {
     int                 flags;
     int                 trace_flags;
-    int                 nb_threads;
+    long int            nb_threads;
     const char          *src_profile;
     const char          *dest_profile;
     const char          *status_profile;

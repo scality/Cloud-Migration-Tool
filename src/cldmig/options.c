@@ -299,6 +299,7 @@ void usage()
             "         [ --help | -h]\n"
             "         [ --delete-source ]\n"
             "         [ --background ]\n"
+            "         [ --worker-threads nb | -w nb ]\n"
             "         [ --create-directories ]\n"
             "         [ --force-resume | -r ]\n"
             "         [ --block-size bytesize | -B bytesize ]\n"
@@ -336,6 +337,7 @@ static struct option    long_options[] = {
     {"background",          no_argument,        0,  0 },
     {"create-directories",  no_argument,        0,  0 },
     {"block-size",          required_argument,  0, 'B'},
+    {"worker-threads",      required_argument,  0, 'w'},
     /* Configuration-related options    */
     {"src-profile",         required_argument,  0, 's'},
     {"dst-profile",         required_argument,  0, 'd'},
@@ -367,7 +369,7 @@ int retrieve_opts(struct cloudmig_options *options, int argc, char* argv[])
     int                     option_index = 0;
 
     while ((cur_opt = getopt_long(argc, argv,
-                                  "-h?B:s:d:S:b:c:rv:t:o:",
+                                  "-h?B:w:s:d:S:b:c:rv:t:o:",
                                   long_options, &option_index)) != -1)
     {
         switch (cur_opt)
@@ -437,6 +439,21 @@ int retrieve_opts(struct cloudmig_options *options, int argc, char* argv[])
                 PRINTERR("Invalid value for block size argument");
                 return EXIT_FAILURE;
             }
+            break ;
+        case 'w':
+            options->nb_threads = strtol(optarg, NULL, 10);
+            if (options->nb_threads < 1 || (options->nb_threads == INT_MAX && errno == ERANGE))
+            {
+                PRINTERR("Invalid value for worker threads number");
+                return EXIT_FAILURE;
+            }
+            /*
+             * In multi-threaded context, enforce auto-creation of dirs
+             * -> Avoids dependency of threads creating files on the threads
+             *    creating the parent directories (as well as the related errors)
+             */
+            if (options->nb_threads > 1)
+                options->flags |= AUTO_CREATE_DIRS;
             break ;
         case 'c':
             if (options->config)

@@ -372,13 +372,42 @@ config_update_options(struct cldmig_config *conf,
                 return EXIT_FAILURE;
             }
             options->flags &= ~AUTO_CREATE_DIRS;
-            if (json_object_get_boolean(val) == TRUE)
+            // Ensure that it is enabled in a multi-threaded context.
+            if (json_object_get_boolean(val) == TRUE || options->nb_threads > 1)
                 options->flags |= AUTO_CREATE_DIRS;
         }
         else if (strcasecmp(key, "block-size") == 0)
         {
-            if (options->block_size == 0)
-                options->block_size = strtoul(json_object_get_string(val), NULL, 10);
+            if (!json_object_is_type(val, json_type_int))
+            {
+                PRINTERR("Unexpected type %i for option 'cloudmig/block-size'.\n",
+                         json_object_get_type(val));
+                return EXIT_FAILURE;
+            }
+            options->block_size = json_object_get_int64(val);
+        }
+        else if (strcasecmp(key, "worker-threads") == 0)
+        {
+            if (!json_object_is_type(val, json_type_int))
+            {
+                PRINTERR("Unexpected type %i for option 'cloudmig/worker-threads'.\n",
+                         json_object_get_type(val));
+                return EXIT_FAILURE;
+            }
+            options->nb_threads = json_object_get_int(val);
+            if (options->nb_threads <= 0)
+            {
+                PRINTERR("Invalid value for option 'cloudmig/worker-threads': %i.\n",
+                         options->nb_threads);
+                return EXIT_FAILURE;
+            }
+            /*
+             * In multi-threaded context, enforce auto-creation of dirs
+             * -> Avoids dependency of threads creating files on the threads
+             *    creating the parent directories (as well as the related errors)
+             */
+            if (options->nb_threads > 1)
+                options->flags |= AUTO_CREATE_DIRS;
         }
     }
     else
