@@ -24,6 +24,9 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
+#include <sys/types.h>
+#include <sys/syscall.h>
+
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -35,6 +38,14 @@
 #include "options.h"
 
 static FILE* unique_logstream = NULL;
+
+#ifndef gettid
+static pid_t
+gettid(void)
+{
+    return syscall(SYS_gettid);
+}
+#endif
 
 int cloudmig_openlog(char* filename)
 {
@@ -98,12 +109,12 @@ void cloudmig_log(enum cloudmig_loglevel lvl, const char* format, ...)
         va_start(args, format);
         if (lvl == ERR_LVL && unique_logstream == NULL)
         {
-            fprintf(stderr, "cloudmig: [%s]", loglvl_str);
+            fprintf(stderr, "cloudmig %i [%s]", gettid(), loglvl_str);
             vfprintf(stderr, format, args);
         }
         if (unique_logstream)
         {
-            fprintf(unique_logstream, "cloudmig: [%s]", loglvl_str);
+            fprintf(unique_logstream, "cloudmig %i [%s]", gettid(), loglvl_str);
             vfprintf(unique_logstream, format, args);
         }
         va_end(args);
