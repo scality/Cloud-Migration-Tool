@@ -134,7 +134,7 @@ viewer_do_update(struct cldmig_viewer *viewer, struct timeval *tlimit)
                     (struct cldmig_transf*)(ctx->tinfos[threadid].infolist)
                 );
             tinfo.namlen = ctx->tinfos[threadid].fpath ?
-                strlen(ctx->tinfos[threadid].fpath) + 1 : 0;
+                strlen(ctx->tinfos[threadid].fpath): 0;
 
             fpath = NULL;
             if (ctx->tinfos[threadid].fpath)
@@ -162,11 +162,14 @@ viewer_do_update(struct cldmig_viewer *viewer, struct timeval *tlimit)
             ret = -1;
             goto end;
         }
-        // Write the filename
-        if (send(viewer->fd, fpath, tinfo.namlen, MSG_NOSIGNAL) == -1)
+        if (tinfo.namlen > 0)
         {
-            ret = -1;
-            goto end;
+            // Write the filename
+            if (send(viewer->fd, fpath, tinfo.namlen, MSG_NOSIGNAL) == -1)
+            {
+                ret = -1;
+                goto end;
+            }
         }
 
         free(fpath);

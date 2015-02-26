@@ -123,7 +123,7 @@ main_menu(void)
                     if (view_instance(item_description(curitem))
                         != EXIT_SUCCESS)
                     {
-        ret_msg = "An error occured while trying to display the tool's data.";
+                        ret_msg = "An error occured while trying to display the tool's data.";
                     }
                 }
             }

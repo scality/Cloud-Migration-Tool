@@ -166,11 +166,29 @@ print_line(int thread_id, char *fname,
     char    *msg = NULL;
     int     statlen = 0;
     int     tmplen = 0;
+
     if (fname == NULL || btotal == 0)
     {
-        mvprintw(thread_id + 2, 0, "Thread[%i] : done...", thread_id);
-        return EXIT_SUCCESS;
+
+        asprintf(&tmp_str, "Thread[%i] : done...", thread_id);
+        if (ret < 0)
+        {
+            ret = EXIT_FAILURE;
+            goto end;
+        }
+        asprintf(&msg, "%-*s", COLS, tmp_str);
+        if (ret < 0)
+        {
+            ret = EXIT_FAILURE;
+            goto end;
+        }
+        mvprintw(thread_id + 2, 0, msg);
+
+        //mvprintw(thread_id + 2, 0, "Thread[%i] : done...", thread_id);
+        ret = EXIT_SUCCESS;
+        goto end;
     }
+
     // nb of highlighted chars of the progress bar.
     int     nbhighlight = bdone * COLS / btotal;
     // More practical values for printing...
@@ -186,13 +204,16 @@ print_line(int thread_id, char *fname,
              float_values[1], sz_str[1],
              float_values[2], sz_str[2]);
     if (ret == -1)
-        return EXIT_FAILURE;
+    {
+        ret = EXIT_FAILURE;
+        goto end;
+    }
 
     ret = asprintf(&tmp_str, "Thread[%i] : %s", thread_id, fname);
     if (ret == -1)
     {
-        free(stats);
-        return EXIT_FAILURE;
+        ret = EXIT_FAILURE;
+        goto end;
     }
     // Printf the whole line into a printable string
     tmplen = strlen(tmp_str);
@@ -203,18 +224,29 @@ print_line(int thread_id, char *fname,
                    tmplen + statlen > COLS ? "..." : "",
                    tmplen + statlen > COLS ? 0 : COLS - tmplen,
                    stats);
-    free(stats);
-    free(tmp_str);
     if (ret == -1)
-        return EXIT_FAILURE;
+    {
+        ret = EXIT_FAILURE;
+        goto end;
+    }
 
     attron(COLOR_PAIR(progressbar_idx));
     mvprintw(thread_id + 2, 0, "%.*s", nbhighlight, msg);
     attroff(COLOR_PAIR(progressbar_idx));
     mvprintw(thread_id + 2, nbhighlight, "%.*s",
              COLS-nbhighlight, &msg[nbhighlight]);
-    free(msg);
-    return EXIT_SUCCESS;
+
+    ret = EXIT_SUCCESS;
+
+end:
+    if (stats)
+        free(stats);
+    if (msg)
+        free(msg);
+    if (tmp_str)
+        free(tmp_str);
+
+    return ret;
 }
 
 

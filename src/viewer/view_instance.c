@@ -124,7 +124,7 @@ state_machine_read(int sockfd, struct cldmig_global_info *ginfo,
                    struct message **msgs)
 {
     int     ret = EXIT_FAILURE;
-    char    type;
+    char    type = GLOBAL_INFO;
 
     // First read the msg type
     ret = read(sockfd, &type, 1);
@@ -142,9 +142,9 @@ state_machine_read(int sockfd, struct cldmig_global_info *ginfo,
         break ;
     case THREAD_INFO:
         {
-            uint32_t thr_id;
+            uint32_t thr_id = -1;
             ret = read(sockfd, &thr_id, sizeof(thr_id));
-            if (ret == -1)
+            if (ret != sizeof(thr_id))
             {
                 ret = EXIT_FAILURE;
                 break ;
@@ -158,23 +158,33 @@ state_machine_read(int sockfd, struct cldmig_global_info *ginfo,
                 bzero(*thr_data + n, ((*thr_nb) - n) * sizeof(**thr_data));
             }
             ret = read(sockfd, &(*thr_data)[thr_id], 4 * sizeof(uint32_t));
-            if (ret == -1)
+            if (ret != 4 * sizeof(uint32_t))
             {
                 ret = EXIT_FAILURE;
                 break ;
             }
-            (*thr_data)[thr_id].name = calloc((*thr_data)[thr_id].fnamlen + 1,
-                                              sizeof(char));
-            if ((*thr_data)[thr_id].name == NULL)
+
+            if ((*thr_data)[thr_id].name)
             {
-                ret = EXIT_FAILURE;
-                break ;
+                free((*thr_data)[thr_id].name);
+                (*thr_data)[thr_id].name = NULL;
             }
-            ret = read(sockfd, (*thr_data)[thr_id].name, (*thr_data)[thr_id].fnamlen);
-            if (ret == -1)
+
+            if ((*thr_data)[thr_id].fnamlen > 0)
             {
-                ret = EXIT_FAILURE;
-                break ;
+                (*thr_data)[thr_id].name = malloc((*thr_data)[thr_id].fnamlen + 1);
+                if ((*thr_data)[thr_id].name == NULL)
+                {
+                    ret = EXIT_FAILURE;
+                    break ;
+                }
+                ret = read(sockfd, (*thr_data)[thr_id].name, (*thr_data)[thr_id].fnamlen);
+                if (ret != (int)((*thr_data)[thr_id].fnamlen))
+                {
+                    ret = EXIT_FAILURE;
+                    break ;
+                }
+                (*thr_data)[thr_id].name[(*thr_data)[thr_id].fnamlen] = 0;
             }
 
             // Useful for debugging
@@ -211,10 +221,11 @@ display_loop(int sockfd)
     // Here the memory for the data received from main program
     struct cldmig_global_info   ginfos;
     uint32_t                    nb_threads = 1;
-    struct thread_info          *thr_data = calloc(nb_threads,
-                                                   sizeof(struct thread_info));
+    struct thread_info          *thr_data = malloc(nb_threads * sizeof(struct thread_info));
     struct message              *msgs = NULL;
     
+    memset(thr_data, 0, sizeof(*thr_data) * nb_threads);
+
     // First, clear screen...
     erase();
 
@@ -255,7 +266,10 @@ err:
         for (uint32_t i =0; i < nb_threads; ++i)
         {
             if (thr_data[i].name)
+            {
                 free(thr_data[i].name);
+                thr_data[i].name = NULL;
+            }
         }
         free(thr_data);
     }

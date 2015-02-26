@@ -64,7 +64,7 @@ get_transfer_description(char **desc, char *path)
 
 err:
     path[len] = '\0';
-    if (fd)
+    if (fd != -1)
         close(fd);
 
     return ret;
@@ -76,7 +76,7 @@ get_instance_list(void)
     struct tool_instance    *b = NULL;
     DIR                     *cldmig_dir = NULL;
     struct dirent           *dir_entry = NULL;
-    char                    path[512];
+    char                    path[512] = {0};
 
     cldmig_dir = opendir("/tmp/cloudmig");
     if (cldmig_dir == NULL)
