@@ -47,23 +47,25 @@ _options_setup_default_status(struct cloudmig_options *options)
     ret = asprintf(&profilepath, "/tmp/cldmig_status.profile");
     if (ret <= 0)
     {
-        PRINTERR("Could not allocate path for default status profile.\n");
+        PRINTERR(" Could not allocate path for default status profile.\n");
         ret = EXIT_FAILURE;
         goto err;
     }
 
-    ret = asprintf(&posixpath, "/home/%s/.cloudmig", getenv("USER"));
+    ret = asprintf(&posixpath, "%s/.cloudmig", getenv("HOME"));
     if (ret <= 0)
     {
-        PRINTERR("Could not allocate path for default status profile.\n");
+        PRINTERR(" Could not allocate path for default status profile.\n");
         ret = EXIT_FAILURE;
         goto err;
     }
 
-    if (mkdir(posixpath, 0700) < 0)
+    ret = mkdir(posixpath, 0700);
+    if (ret < 0 && errno != EEXIST)
     {
-        PRINTERR("Cannot create local directory '%s'"
-                 " for status storage.", posixpath);
+        PRINTERR(" Cannot create local directory '%s'"
+                 " for status storage: %s.\n",
+                 posixpath, strerror(errno));
         ret = EXIT_FAILURE;
         goto err;
     }
@@ -71,15 +73,17 @@ _options_setup_default_status(struct cloudmig_options *options)
     profile = fopen(profilepath, "w+");
     if (profile == NULL)
     {
-        PRINTERR("Cannot open status profile temp file.");
+        PRINTERR(" Cannot open status profile temp file: %s.\n",
+                 strerror(errno));
         ret = EXIT_FAILURE;
         goto err;
     }
 
-    if (fprintf(profile, "backend=posix\nbase_path=%s\n", getenv("USER")) <= 0
-        || fflush(profile) <= 0)
+    if (fprintf(profile, "backend=posix\nbase_path=%s/.cloudmig\n", getenv("HOME")) <= 0
+        || fflush(profile) < 0)
     {
-        PRINTERR("Could not generated default profile for status storage.\n");
+        PRINTERR(" Could not generate default profile %s for status storage: %s.\n",
+                 profilepath, strerror(errno));
         ret = EXIT_FAILURE;
         goto err;
     }
