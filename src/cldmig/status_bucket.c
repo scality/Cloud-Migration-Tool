@@ -799,6 +799,7 @@ int
 _bucket_recurse(dpl_ctx_t *src_ctx,
                 struct bucket_status *bst,
                 char *dirpath,
+                int baselen,
                 uint64_t    *added_countp,
                 uint64_t    *added_sizep)
 {
@@ -842,7 +843,7 @@ _bucket_recurse(dpl_ctx_t *src_ctx,
 
         if (strcmp(dirent.name, ".") && strcmp(dirent.name, ".."))
         {
-            ret = _bucket_add_entry(bst, curpath, dirent.size, dirent.type);
+            ret = _bucket_add_entry(bst, &curpath[baselen], dirent.size, dirent.type);
             if (ret != EXIT_SUCCESS)
             {
                 ret = EXIT_FAILURE;
@@ -851,7 +852,7 @@ _bucket_recurse(dpl_ctx_t *src_ctx,
 
             if (DPL_FTYPE_DIR == dirent.type)
             {
-                dplret = _bucket_recurse(src_ctx, bst, curpath, &added_count, &added_size);
+                dplret = _bucket_recurse(src_ctx, bst, curpath, baselen, &added_count, &added_size);
                 if (dplret != DPL_SUCCESS)
                 {
                     ret = EXIT_FAILURE;
@@ -885,7 +886,7 @@ end:
 
 struct bucket_status*
 status_bucket_create(dpl_ctx_t *status_ctx, dpl_ctx_t *src_ctx,
-                     char *storepath, char *srcname, char *dstname,
+                     char *storepath, char *srcpath, char *dstpath,
                      uint64_t *countp, uint64_t *sizep)
 {
     struct bucket_status    *ret = NULL;
@@ -899,13 +900,13 @@ status_bucket_create(dpl_ctx_t *status_ctx, dpl_ctx_t *src_ctx,
     const char              *filebuf = NULL;
 
     cloudmig_log(DEBUG_LVL, "[Creating Bucket Status] "
-                 "Creating status file for bucket '%s'...\n", srcname);
+                 "Creating status file for bucket '%s'...\n", srcpath);
 
     sbucket = status_bucket_new();
     if (sbucket == NULL)
         goto end;
 
-    iret = _bucket_set_paths(sbucket, storepath, srcname, dstname);
+    iret = _bucket_set_paths(sbucket, storepath, srcpath, dstpath);
     if (iret != EXIT_SUCCESS)
         goto end;
 
@@ -917,7 +918,7 @@ status_bucket_create(dpl_ctx_t *status_ctx, dpl_ctx_t *src_ctx,
         goto end;
     }
 
-    iret = _bucket_recurse(src_ctx, sbucket, srcname, &added_count, &added_size);
+    iret = _bucket_recurse(src_ctx, sbucket, srcpath, strlen(srcpath), &added_count, &added_size);
     if (iret != EXIT_SUCCESS)
         goto end;
 
@@ -935,7 +936,7 @@ status_bucket_create(dpl_ctx_t *status_ctx, dpl_ctx_t *src_ctx,
                            (char*)filebuf, strlen(filebuf))) != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not create bucket %s's status file at %s: %s\n",
-                 __FUNCTION__, srcname, sbucket->path, dpl_status_str(dplret));
+                 __FUNCTION__, srcpath, sbucket->path, dpl_status_str(dplret));
         goto end;
     }
 
@@ -947,7 +948,7 @@ status_bucket_create(dpl_ctx_t *status_ctx, dpl_ctx_t *src_ctx,
     }
 
     cloudmig_log(DEBUG_LVL, "[Creating Bucket Status] Bucket %s: SUCCESS.\n",
-                 srcname);
+                 srcpath);
 
     *countp = added_count;
     *sizep = added_size;
@@ -1276,9 +1277,35 @@ status_bucket_next_ex(dpl_ctx_t *status_ctx,
     uint64_t                objsize = 0;
     bool                    objdone = 0;
     const char              *objname = NULL;
+    const char              *srcpath = NULL;
+    const char              *dstpath = NULL;
 
     _bucket_lock(bst);
     bucket_locked = true;
+
+    if (json_object_object_get_ex(bst->json,
+                                  CLOUDMIG_STATUS_BUCKET_SRCPATH,
+                                  &objfield) == FALSE
+        || !json_object_is_type(objfield, json_type_string))
+    {
+        PRINTERR("[Bucket Status Next Entry] "
+                 "Could not find src path within bucket's json status.\n");
+        ret = -1;
+        goto end;
+    }
+    srcpath = json_object_get_string(objfield);
+
+    if (json_object_object_get_ex(bst->json,
+                                  CLOUDMIG_STATUS_BUCKET_DSTPATH,
+                                  &objfield) == FALSE
+        || !json_object_is_type(objfield, json_type_string))
+    {
+        PRINTERR("[Bucket Status Next Entry] "
+                 "Could not find dst path within bucket's json status.\n");
+        ret = -1;
+        goto end;
+    }
+    dstpath = json_object_get_string(objfield);
 
     if (json_object_object_get_ex(bst->json,
                                   CLOUDMIG_STATUS_BUCKET_OBJECTS,
@@ -1378,8 +1405,9 @@ status_bucket_next_ex(dpl_ctx_t *status_ctx,
             found = true;
 
             /*
-             * The path of each file is part of the status, so there is nothing
-             * to compute for the paths.
+             * The path of each file is part of the status, so we need to compute
+             * the exact source and destination paths including bucket names and
+             * basepath (if any in the status bucket configuration)
              *
              * Then, try and load a possible saved state for those files (if any)
              */
@@ -1388,6 +1416,26 @@ status_bucket_next_ex(dpl_ctx_t *status_ctx,
             {
                 PRINTERR("[Bucket Status Next Entry] "
                          "Could not dup relative file path : %s.\n", strerror(errno));
+                ret = -1;
+                goto end;
+            }
+
+            // Compute source path
+            if (asprintf(&filestate->src_path, "%s%s", srcpath, objname) == -1)
+            {
+                PRINTERR("[Bucket Status Next Entry] "
+                         "Could not compute intermediary status file path: %s.\n",
+                         strerror(errno));
+                ret = -1;
+                goto end;
+            }
+
+            // Compute destination path
+            if (asprintf(&filestate->dst_path, "%s%s", dstpath, objname) == -1)
+            {
+                PRINTERR("[Bucket Status Next Entry] "
+                         "Could not compute intermediary status file path: %s.\n",
+                         strerror(errno));
                 ret = -1;
                 goto end;
             }
@@ -1452,6 +1500,12 @@ end:
         if (filestate->obj_path)
             free(filestate->obj_path);
         filestate->obj_path = NULL;
+        if (filestate->src_path)
+            free(filestate->src_path);
+        filestate->src_path = NULL;
+        if (filestate->dst_path)
+            free(filestate->dst_path);
+        filestate->dst_path = NULL;
         if (filestate->status_path)
             free(filestate->status_path);
         filestate->status_path = NULL;
@@ -1502,6 +1556,14 @@ status_bucket_release_entry(struct file_transfer_state *filestate)
     if (filestate->obj_path)
         free(filestate->obj_path);
     filestate->obj_path = NULL;
+
+    if (filestate->src_path)
+        free(filestate->src_path);
+    filestate->src_path = NULL;
+
+    if (filestate->dst_path)
+        free(filestate->dst_path);
+    filestate->dst_path = NULL;
 
     filestate->bst->refcount -= 1;
     

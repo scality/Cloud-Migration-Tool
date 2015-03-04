@@ -102,6 +102,9 @@ struct file_transfer_state
 
     // Data allowing to retrieve easily where does this entry come from
     char                    *obj_path;
+    char                    *src_path;
+    char                    *dst_path;
+
     char                    *status_path;
     int                     state_idx;
 };
@@ -110,6 +113,8 @@ struct file_transfer_state
     {                                   \
         NULL,                           \
         { 0, 0, 0 },                    \
+        NULL,                           \
+        NULL,                           \
         NULL,                           \
         NULL,                           \
         NULL,                           \

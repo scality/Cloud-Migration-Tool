@@ -162,7 +162,7 @@ create_directory(struct cldmig_info *tinfo,
 
     if (ctx->options.flags & AUTO_CREATE_DIRS)
     {
-        parentdir = strdup(filestate->obj_path);
+        parentdir = strdup(filestate->dst_path);
         if (parentdir == NULL)
         {
             PRINTERR("[Migrating] Could not strdup path for parent directory creation.\n");
@@ -174,7 +174,7 @@ create_directory(struct cldmig_info *tinfo,
         if (ret != EXIT_SUCCESS)
         {
             PRINTERR("[Migrating] Could not create directory %s\n",
-                     filestate->obj_path);
+                     filestate->dst_path);
             ret = EXIT_FAILURE;
             goto err;
         }
@@ -185,21 +185,21 @@ create_directory(struct cldmig_info *tinfo,
      * Workaround of a behavior from VFS API: Cannot mkdir with paths ending by
      * a delimiter, so we null the ending delimiter if any
      */
-    if (pathlen > 1 && filestate->obj_path[pathlen - 1] == '/')
+    if (pathlen > 1 && filestate->dst_path[pathlen - 1] == '/')
     {
-        delim = &filestate->obj_path[pathlen];
-        while (delim > filestate->obj_path+1 && *(delim-1) == '/')
+        delim = &filestate->dst_path[pathlen];
+        while (delim > filestate->dst_path+1 && *(delim-1) == '/')
             --delim;
         *delim = 0;
     }
     else
         delim = NULL;
 
-    dplret = dpl_getattr(ctx->src_ctx, filestate->obj_path, &md, NULL/*sysmd*/);
+    dplret = dpl_getattr(ctx->src_ctx, filestate->src_path, &md, NULL/*sysmd*/);
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("[Migrating] Could not get source directory %s attributes: %s.\n",
-                 filestate->obj_path, dpl_status_str(dplret));
+                 filestate->src_path, dpl_status_str(dplret));
         ret = EXIT_FAILURE;
         goto err;
     }
@@ -209,12 +209,12 @@ create_directory(struct cldmig_info *tinfo,
      * the directory might have already been created by another thread
      * -> EEXIST is not an error.
      */
-    dplret = dpl_mkdir(ctx->dest_ctx, filestate->obj_path, md, NULL/*sysmd*/);
+    dplret = dpl_mkdir(ctx->dest_ctx, filestate->dst_path, md, NULL/*sysmd*/);
     if (dplret != DPL_SUCCESS && dplret != DPL_EEXIST)
     {
         PRINTERR("[Migrating] "
                  "Could not create directory %s : %s.\n",
-                 filestate->obj_path, dpl_status_str(dplret));
+                 filestate->dst_path, dpl_status_str(dplret));
         ret = EXIT_FAILURE;
         goto err;
     }
@@ -250,7 +250,7 @@ create_symlink(struct cldmig_info *tinfo,
 
     if (ctx->options.flags & AUTO_CREATE_DIRS)
     {
-        parentdir = strdup(filestate->obj_path);
+        parentdir = strdup(filestate->dst_path);
         if (parentdir == NULL)
         {
             PRINTERR("[Migrating] Could not strdup path for parent directory creation.\n");
@@ -262,28 +262,28 @@ create_symlink(struct cldmig_info *tinfo,
         if (ret != EXIT_SUCCESS)
         {
             PRINTERR("[Migrating] Could not create directory %s\n",
-                     filestate->obj_path);
+                     filestate->dst_path);
             ret = EXIT_FAILURE;
             goto err;
         }
     }
 
-    dplret = dpl_readlink(ctx->src_ctx, filestate->obj_path, &link_target);
+    dplret = dpl_readlink(ctx->src_ctx, filestate->src_path, &link_target);
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("[Migrating] "
                  "Could not read target of symlink %s : %s.\n",
-                 filestate->obj_path, dpl_status_str(dplret));
+                 filestate->src_path, dpl_status_str(dplret));
         ret = EXIT_FAILURE;
         goto err;
     }
 
-    dplret = dpl_symlink(ctx->dest_ctx, link_target, filestate->obj_path);
+    dplret = dpl_symlink(ctx->dest_ctx, link_target, filestate->dst_path);
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("[Migrating] "
                  "Could not create symlink %s to file %s : %s\n",
-                 filestate->obj_path, link_target, dpl_status_str(dplret));
+                 filestate->dst_path, link_target, dpl_status_str(dplret));
         ret = EXIT_FAILURE;
         goto err;
     }
@@ -330,7 +330,7 @@ transfer_data_chunk(struct cldmig_info *tinfo,
     if (ret != DPL_SUCCESS)
     {
         PRINTERR("Could not get next block from source file %s : %s.\n",
-                 filestate->obj_path, dpl_status_str(ret));
+                 filestate->src_path, dpl_status_str(ret));
         ret = DPL_FAILURE;
         goto err;
     }
@@ -339,7 +339,7 @@ transfer_data_chunk(struct cldmig_info *tinfo,
     if (ret != DPL_SUCCESS)
     {
         PRINTERR("Could not put next block to destination file %s : %s.\n",
-                 filestate->obj_path, dpl_status_str(ret));
+                 filestate->dst_path, dpl_status_str(ret));
         ret = DPL_FAILURE;
         goto err;
     }
@@ -388,7 +388,7 @@ transfer_chunked(struct cldmig_info *tinfo,
     /*
      * Open the source file for reading
      */
-    dplret = dpl_open(ctx->src_ctx, filestate->obj_path,
+    dplret = dpl_open(ctx->src_ctx, filestate->src_path,
                       DPL_VFILE_FLAG_RDONLY|DPL_VFILE_FLAG_STREAM,
                       NULL /* opts */, NULL /* cond */,
                       NULL/* MD */, NULL /* sysmd */,
@@ -398,14 +398,14 @@ transfer_chunked(struct cldmig_info *tinfo,
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not open source file %s: %s\n",
-                 __FUNCTION__, filestate->obj_path, dpl_status_str(dplret));
+                 __FUNCTION__, filestate->src_path, dpl_status_str(dplret));
         goto err;
     }
 
     /*
      * Open the destination file for writing
      */
-    dplret = dpl_open(ctx->dest_ctx, filestate->obj_path,
+    dplret = dpl_open(ctx->dest_ctx, filestate->dst_path,
                       DPL_VFILE_FLAG_CREAT|DPL_VFILE_FLAG_WRONLY|DPL_VFILE_FLAG_STREAM,
                       NULL /* opts */, NULL /* cond */,
                       NULL /*MD*/, NULL/*SYSMD*/,
@@ -415,7 +415,7 @@ transfer_chunked(struct cldmig_info *tinfo,
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("%s: Could not open dest file %s: %s\n",
-                 __FUNCTION__, filestate->obj_path, dpl_status_str(dplret));
+                 __FUNCTION__, filestate->dst_path, dpl_status_str(dplret));
         goto err;
     }
 
@@ -440,7 +440,7 @@ transfer_chunked(struct cldmig_info *tinfo,
     if (DPL_SUCCESS != dplret)
     {
         PRINTERR("%s: Could not flush destination file %s: %s",
-                __FUNCTION__, filestate->obj_path, dpl_status_str(dplret));
+                __FUNCTION__, filestate->dst_path, dpl_status_str(dplret));
         goto err;
     }
 
@@ -453,7 +453,7 @@ err:
         if (dplret != DPL_SUCCESS)
         {
             PRINTERR("%s: Could not close destination file %s: %s\n",
-                     __FUNCTION__, filestate->obj_path,
+                     __FUNCTION__, filestate->dst_path,
                      dpl_status_str(dplret));
         }
     }
@@ -464,7 +464,7 @@ err:
         if (dplret != DPL_SUCCESS)
         {
             PRINTERR("%s: Could not close source file %s: %s\n",
-                     __FUNCTION__, filestate->obj_path,
+                     __FUNCTION__, filestate->src_path,
                      dpl_status_str(dplret));
         }
     }
@@ -490,22 +490,22 @@ transfer_whole(struct cldmig_info *tinfo,
 
     memset(&sysmd, 0, sizeof(sysmd));
 
-    dplret = dpl_fget(ctx->src_ctx, filestate->obj_path, NULL, NULL, NULL,
+    dplret = dpl_fget(ctx->src_ctx, filestate->src_path, NULL, NULL, NULL,
                       &buffer, &buflen, &metadata, &sysmd);
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("[Migrating] Could not fget source file %s: %s\n",
-                 filestate->obj_path, dpl_status_str(dplret));
+                 filestate->src_path, dpl_status_str(dplret));
         ret = EXIT_FAILURE;
         goto err;
     }
 
-    dplret = dpl_fput(ctx->dest_ctx, filestate->obj_path, NULL, NULL, NULL,
+    dplret = dpl_fput(ctx->dest_ctx, filestate->dst_path, NULL, NULL, NULL,
                       metadata, &sysmd, buffer, buflen);
     if (dplret != DPL_SUCCESS)
     {
         PRINTERR("[Migrating] Could not fput destination file %s: %s\n",
-                 filestate->obj_path, dpl_status_str(dplret));
+                 filestate->dst_path, dpl_status_str(dplret));
         ret = EXIT_FAILURE;
         goto err;
     }
@@ -546,7 +546,7 @@ transfer_file(struct cldmig_info* tinfo,
 
     if (tinfo->config_flags & AUTO_CREATE_DIRS)
     {
-        parentdir = strdup(filestate->obj_path);
+        parentdir = strdup(filestate->dst_path);
         if (parentdir == NULL)
         {
             PRINTERR("[Migrating] Could not strdup path for parent directory creation.\n");
@@ -557,7 +557,7 @@ transfer_file(struct cldmig_info* tinfo,
         if (create_parent_dirs(tinfo->ctx, parentdir) == EXIT_FAILURE)
         {
             PRINTERR("[Migrating] Could not create parent directories for file %s\n",
-                     filestate->obj_path);
+                     filestate->dst_path);
             ret = EXIT_FAILURE;
             goto err;
         }
