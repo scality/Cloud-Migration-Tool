@@ -434,6 +434,7 @@ transfer_chunked(struct cldmig_info *tinfo,
     {
         PRINTERR("%s: Could not flush destination file %s: %s",
                 __FUNCTION__, filestate->dst_path, dpl_status_str(dplret));
+        ret = EXIT_FAILURE;
         goto err;
     }
 
