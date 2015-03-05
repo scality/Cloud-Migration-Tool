@@ -54,7 +54,7 @@
 /*
  * Default config values
  */
-#define CLOUDMIG_DEFAULT_BLOCK_SIZE     (256*1024*1024) // 256MiB
+#define CLOUDMIG_DEFAULT_BLOCK_SIZE     (64*1024*1024) // 64
 #define CLOUDMIG_ETA_TIMEFRAME          10 // in seconds
 
 
