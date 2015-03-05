@@ -89,13 +89,6 @@ create_parent_dirs(struct cloudmig_ctx *ctx,
     dplret = dpl_getattr(ctx->dest_ctx, path, NULL /*mdp*/, NULL/*sysmd*/);
     if (dplret != DPL_SUCCESS)
     {
-        // Multi-threaded context: Another thread created the directory -> OK
-        if (dplret == DPL_EEXIST)
-        {
-            ret = EXIT_SUCCESS;
-            goto err;
-        }
-
         if (dplret != DPL_ENOENT)
         {
             ret = EXIT_FAILURE;
@@ -157,8 +150,8 @@ create_directory(struct cldmig_info *tinfo,
     dpl_dict_t              *md = NULL;
     char                    *parentdir = NULL;
 
-    cloudmig_log(DEBUG_LVL, "[Migrating] Directory %s\n",
-                 filestate->obj_path);
+    cloudmig_log(DEBUG_LVL, "[Migrating] Directory %s (%s -> %s)\n",
+                 filestate->obj_path, filestate->src_path, filestate->dst_path);
 
     if (ctx->options.flags & AUTO_CREATE_DIRS)
     {
@@ -173,7 +166,7 @@ create_directory(struct cldmig_info *tinfo,
         ret = create_parent_dirs(ctx, parentdir);
         if (ret != EXIT_SUCCESS)
         {
-            PRINTERR("[Migrating] Could not create directory %s\n",
+            PRINTERR("[Migrating] Could not create parent directories for %s\n",
                      filestate->dst_path);
             ret = EXIT_FAILURE;
             goto err;
