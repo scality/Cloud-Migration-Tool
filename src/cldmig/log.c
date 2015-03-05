@@ -80,6 +80,8 @@ void cloudmig_closelog(void)
 
 void cloudmig_log(enum cloudmig_loglevel lvl, const char* format, ...)
 {
+    char *fullfmt = NULL;
+
     if (lvl >= gl_loglevel
         && !(gl_isbackground && unique_logstream == stderr))
     {
@@ -106,17 +108,19 @@ void cloudmig_log(enum cloudmig_loglevel lvl, const char* format, ...)
         default:
             break ;
         }
+
+        if (asprintf(&fullfmt, "cloudmig:%i:[%s]%s",
+                     gettid(), loglvl_str, format) < 0)
+            goto end;
+
         va_start(args, format);
-        if (lvl == ERR_LVL && unique_logstream == NULL)
-        {
-            fprintf(stderr, "cloudmig %i [%s]", gettid(), loglvl_str);
-            vfprintf(stderr, format, args);
-        }
+        if (lvl >= ERR_LVL && unique_logstream == NULL)
+            vfprintf(stderr, fullfmt, args);
         if (unique_logstream)
-        {
-            fprintf(unique_logstream, "cloudmig %i [%s]", gettid(), loglvl_str);
-            vfprintf(unique_logstream, format, args);
-        }
+            vfprintf(unique_logstream, fullfmt, args);
         va_end(args);
     }
+end:
+    if (fullfmt)
+        free(fullfmt);
 }
