@@ -145,7 +145,7 @@ create_directory(struct cldmig_info *tinfo,
     int                     ret;
     dpl_status_t            dplret;
     struct cloudmig_ctx     *ctx = tinfo->ctx;
-    int                     pathlen = strlen(filestate->obj_path);
+    int                     pathlen = strlen(filestate->dst_path);
     char                    *delim = NULL;
     dpl_dict_t              *md = NULL;
     char                    *parentdir = NULL;
