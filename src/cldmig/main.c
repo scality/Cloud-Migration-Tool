@@ -35,6 +35,7 @@
 #include "status_store.h"
 #include "status_digest.h"
 #include "display.h"
+#include "synced_dir.h"
 
 
 enum cloudmig_loglevel  gl_loglevel = INFO_LVL;
@@ -125,6 +126,8 @@ int main(int argc, char* argv[])
         }
         ctx.tinfos[i].lock_inited = 1;
     }
+
+    ctx.synced_dir_ctx = synced_dir_context_new();
 
     // Allocate/Initialize the two droplet contexts
     if (load_profiles(&ctx) == EXIT_FAILURE)
@@ -243,6 +246,8 @@ failure:
         dpl_ctx_free(ctx.dest_ctx);
     if (ctx.status_ctx)
         dpl_ctx_free(ctx.status_ctx);
+    if (ctx.synced_dir_ctx)
+        synced_dir_context_delete(ctx.synced_dir_ctx);
     if (ctx.options.src_buckets)
     {
         for (int i=0; i < ctx.options.n_buckets; i++)

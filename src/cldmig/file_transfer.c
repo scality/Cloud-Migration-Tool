@@ -36,6 +36,7 @@
 
 #include "status_store.h"
 #include "status_digest.h"
+#include "synced_dir.h"
 
 /*
  * This function creates an element for the byte rate computing list
@@ -60,15 +61,25 @@ _add_transfer_info(struct cldmig_info *tinfo, size_t len)
     pthread_mutex_unlock(&tinfo->lock);
 }
 
-
+/*
+ * In this function, we use the synchronized directory creator API (synced
+ * dirs) in order to avoid a specific issue noticed in some storage backends
+ * in droplet (or the actual matching servers). The S3 backend for instance
+ * sometimes gets a server returning an internal server error (HTTP 500) for
+ * one of two concurrent mkdir calls.
+ *
+ * Because of this, the synchronized directory module exists and is used here.
+ */
 static int
-create_parent_dirs(struct cloudmig_ctx *ctx,
-                   char *path)
+create_parent_dirs(struct cloudmig_ctx *ctx, char *path)
 {
-    char            *delim = NULL;
-    int             ret;
-    dpl_status_t    dplret = DPL_SUCCESS;
-    dpl_dict_t      *md = NULL;
+    char                *delim = NULL;
+    int                 ret;
+    dpl_status_t        dplret = DPL_SUCCESS;
+    dpl_dict_t          *md = NULL;
+    struct synceddir    *sdir = NULL;
+    bool                is_responsible = false;
+    bool                created = false;
 
     cloudmig_log(DEBUG_LVL, "[Migrating] Creating parent directory of file %s\n", path);
 
@@ -78,6 +89,7 @@ create_parent_dirs(struct cloudmig_ctx *ctx,
         ret = EXIT_SUCCESS;
         goto err;
     }
+
     // FIXME: Workaround: Replace current delimiter by a nul char since the
     // dpl_mkdir function seems to fail when the last char is a delimiter.
     cloudmig_log(WARN_LVL, "[Migrating] Creating parent directory of file %s\n",
@@ -96,40 +108,58 @@ create_parent_dirs(struct cloudmig_ctx *ctx,
         }
 
         // ENOENT, try to create parents then self.
-        ret = create_parent_dirs(ctx, path);
-        if (ret != EXIT_SUCCESS)
-            goto err;
-
-        dplret = dpl_getattr(ctx->src_ctx, path, &md, NULL/*sysmd*/);
-        if (dplret != DPL_SUCCESS)
+        synced_dir_register(ctx->synced_dir_ctx, path, &sdir, &is_responsible);
+        if (is_responsible)
         {
-            PRINTERR("[Migrating] Could not get source directory %s attributes: %s.\n",
-                     path, dpl_status_str(dplret));
-            ret = EXIT_FAILURE;
-            goto err;
-        }
 
-        /*
-         * In a Multi-threaded context, directory might have been created by a
-         * concurrent thread
-         * -> EEXIST is not an error.
-         */
-        dplret = dpl_mkdir(ctx->dest_ctx, path, md, NULL/*sysmd*/);
-        if (dplret != DPL_SUCCESS && dplret != DPL_EEXIST)
+            ret = create_parent_dirs(ctx, path);
+            if (ret != EXIT_SUCCESS)
+                goto err;
+
+            dplret = dpl_getattr(ctx->src_ctx, path, &md, NULL/*sysmd*/);
+            if (dplret != DPL_SUCCESS)
+            {
+                PRINTERR("[Migrating] Could not get source directory %s attributes: %s.\n",
+                         path, dpl_status_str(dplret));
+                ret = EXIT_FAILURE;
+                goto err;
+            }
+
+            /*
+             * In a Multi-threaded context, directory might have been created by a
+             * concurrent thread
+             * -> EEXIST is not an error.
+             */
+            dplret = dpl_mkdir(ctx->dest_ctx, path, md, NULL/*sysmd*/);
+            if (dplret != DPL_SUCCESS && dplret != DPL_EEXIST)
+            {
+                PRINTERR("[Migrating] Creating parent directory %s: %s\n",
+                         path, dpl_status_str(dplret));
+                ret = EXIT_FAILURE;
+                goto err;
+            }
+            created = true;
+
+            cloudmig_log(DEBUG_LVL,
+                         "[Migrating] Parent directories created with success !\n");
+        }
+        else
         {
-            PRINTERR("[Migrating] Creating parent directory %s: %s\n",
-                     path, dpl_status_str(dplret));
-            ret = EXIT_FAILURE;
-            goto err;
+            created = synced_dir_completion_wait(sdir);
+            if (!created)
+            {
+                ret = EXIT_FAILURE;
+                goto err;
+            }
         }
-
-        cloudmig_log(DEBUG_LVL,
-                     "[Migrating] Parent directories created with success !\n");
     }
 
     ret = EXIT_SUCCESS;
 
 err:
+    if (sdir)
+        synced_dir_unregister(sdir, is_responsible, created);
+
     if (delim)
         *delim = '/';
     if (md)
@@ -149,6 +179,9 @@ create_directory(struct cldmig_info *tinfo,
     char                    *delim = NULL;
     dpl_dict_t              *md = NULL;
     char                    *parentdir = NULL;
+    struct synceddir        *sdir = NULL;
+    bool                    is_responsible = false;
+    bool                    created = false;
 
     cloudmig_log(DEBUG_LVL, "[Migrating] Directory %s (%s -> %s)\n",
                  filestate->obj_path, filestate->src_path, filestate->dst_path);
@@ -188,28 +221,43 @@ create_directory(struct cldmig_info *tinfo,
     else
         delim = NULL;
 
-    dplret = dpl_getattr(ctx->src_ctx, filestate->src_path, &md, NULL/*sysmd*/);
-    if (dplret != DPL_SUCCESS)
+    synced_dir_register(ctx->synced_dir_ctx, filestate->dst_path, &sdir, &is_responsible);
+    if (is_responsible)
     {
-        PRINTERR("[Migrating] Could not get source directory %s attributes: %s.\n",
-                 filestate->src_path, dpl_status_str(dplret));
-        ret = EXIT_FAILURE;
-        goto err;
-    }
+        dplret = dpl_getattr(ctx->src_ctx, filestate->src_path, &md, NULL/*sysmd*/);
+        if (dplret != DPL_SUCCESS)
+        {
+            PRINTERR("[Migrating] Could not get source directory %s attributes: %s.\n",
+                     filestate->src_path, dpl_status_str(dplret));
+            ret = EXIT_FAILURE;
+            goto err;
+        }
 
-    /*
-     * In a multi-threaded context,
-     * the directory might have already been created by another thread
-     * -> EEXIST is not an error.
-     */
-    dplret = dpl_mkdir(ctx->dest_ctx, filestate->dst_path, md, NULL/*sysmd*/);
-    if (dplret != DPL_SUCCESS && dplret != DPL_EEXIST)
+        /*
+         * In a multi-threaded context,
+         * the directory might have already been created by another thread
+         * -> EEXIST is not an error.
+         */
+        dplret = dpl_mkdir(ctx->dest_ctx, filestate->dst_path, md, NULL/*sysmd*/);
+        if (dplret != DPL_SUCCESS && dplret != DPL_EEXIST)
+        {
+            PRINTERR("[Migrating] "
+                     "Could not create directory %s : %s.\n",
+                     filestate->dst_path, dpl_status_str(dplret));
+            ret = EXIT_FAILURE;
+            goto err;
+        }
+
+        created = true;
+    }
+    else
     {
-        PRINTERR("[Migrating] "
-                 "Could not create directory %s : %s.\n",
-                 filestate->dst_path, dpl_status_str(dplret));
-        ret = EXIT_FAILURE;
-        goto err;
+        created = synced_dir_completion_wait(sdir);
+        if (!created)
+        {
+            ret = EXIT_FAILURE;
+            goto err;
+        }
     }
 
     // Update info list for viewer's ETA
@@ -218,6 +266,9 @@ create_directory(struct cldmig_info *tinfo,
     ret = EXIT_SUCCESS;
 
 err:
+    if (sdir)
+        synced_dir_unregister(sdir, is_responsible, created);
+
     if (parentdir)
         free(parentdir);
     if (delim)

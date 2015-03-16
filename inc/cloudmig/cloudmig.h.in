@@ -102,6 +102,7 @@ struct cloudmig_ctx
     dpl_ctx_t               *status_ctx;
 
     struct cloudmig_status  *status;
+    struct synceddir_ctx    *synced_dir_ctx;
 
     struct cldmig_display   *display;
 
@@ -113,6 +114,7 @@ struct cloudmig_ctx
 #define CTX_INITIALIZER {           \
     CONF_INITIALIZER,               \
     OPTIONS_INITIALIZER,            \
+    NULL,                           \
     NULL,                           \
     NULL,                           \
     NULL,                           \
