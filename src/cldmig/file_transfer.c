@@ -71,9 +71,9 @@ _add_transfer_info(struct cldmig_info *tinfo, size_t len)
  * Because of this, the synchronized directory module exists and is used here.
  */
 static int
-create_parent_dirs(struct cloudmig_ctx *ctx, char *path)
+create_parent_dirs(struct cloudmig_ctx *ctx, char *srcpath, char *dstpath)
 {
-    char                *delim = NULL;
+    char                *srcdelim = NULL, *dstdelim = NULL;
     int                 ret;
     dpl_status_t        dplret = DPL_SUCCESS;
     dpl_dict_t          *md = NULL;
@@ -81,24 +81,40 @@ create_parent_dirs(struct cloudmig_ctx *ctx, char *path)
     bool                is_responsible = false;
     bool                created = false;
 
-    cloudmig_log(DEBUG_LVL, "[Migrating] Creating parent directory of file %s\n", path);
+    cloudmig_log(DEBUG_LVL, "[Migrating] Creating parent directory of file %s\n", dstpath);
 
-    delim = strrchr(path, '/');
-    if (delim == NULL)
+    dstdelim = strrchr(dstpath, '/');
+    if (dstdelim == NULL)
     {
         ret = EXIT_SUCCESS;
         goto err;
     }
 
-    // FIXME: Workaround: Replace current delimiter by a nul char since the
-    // dpl_mkdir function seems to fail when the last char is a delimiter.
-    cloudmig_log(WARN_LVL, "[Migrating] Creating parent directory of file %s\n",
-                 path);
-    *delim = 0;
-    cloudmig_log(WARN_LVL, "[Migrating] Creating parent directory=%s\n",
-                 path);
+    srcdelim = strrchr(srcpath, '/');
+    if (srcdelim == NULL)
+    {
+        ret = EXIT_SUCCESS;
+        goto err;
+    }
 
-    dplret = dpl_getattr(ctx->dest_ctx, path, NULL /*mdp*/, NULL/*sysmd*/);
+    /*
+     * FIXME: Workaround:
+     *  - Replace current dstdelim by a nul char since the
+     * dpl_mkdir function seems to fail when the last char is a delimiter.
+     *  - Replace character following srcdelim by a nul char since the S3
+     * backend requires the ending '/' to be part of the object name when
+     * reading informations (attributes) from directories.
+     */
+    cloudmig_log(WARN_LVL, "[Migrating] Creating parent directory of file %s\n",
+                 dstpath);
+    *dstdelim = 0;
+    if (*(srcdelim+1) != 0)
+        *(srcdelim+1) = 0;
+    cloudmig_log(WARN_LVL, "[Migrating] Creating parent directory=%s\n",
+                 dstpath);
+
+    // Check existence
+    dplret = dpl_getattr(ctx->dest_ctx, dstpath, NULL /*mdp*/, NULL/*sysmd*/);
     if (dplret != DPL_SUCCESS)
     {
         if (dplret != DPL_ENOENT)
@@ -108,19 +124,19 @@ create_parent_dirs(struct cloudmig_ctx *ctx, char *path)
         }
 
         // ENOENT, try to create parents then self.
-        synced_dir_register(ctx->synced_dir_ctx, path, &sdir, &is_responsible);
+        synced_dir_register(ctx->synced_dir_ctx, dstpath, &sdir, &is_responsible);
         if (is_responsible)
         {
 
-            ret = create_parent_dirs(ctx, path);
+            ret = create_parent_dirs(ctx, srcpath, dstpath);
             if (ret != EXIT_SUCCESS)
                 goto err;
 
-            dplret = dpl_getattr(ctx->src_ctx, path, &md, NULL/*sysmd*/);
+            dplret = dpl_getattr(ctx->src_ctx, srcpath, &md, NULL/*sysmd*/);
             if (dplret != DPL_SUCCESS)
             {
                 PRINTERR("[Migrating] Could not get source directory %s attributes: %s.\n",
-                         path, dpl_status_str(dplret));
+                         srcpath, dpl_status_str(dplret));
                 ret = EXIT_FAILURE;
                 goto err;
             }
@@ -130,11 +146,11 @@ create_parent_dirs(struct cloudmig_ctx *ctx, char *path)
              * concurrent thread
              * -> EEXIST is not an error.
              */
-            dplret = dpl_mkdir(ctx->dest_ctx, path, md, NULL/*sysmd*/);
+            dplret = dpl_mkdir(ctx->dest_ctx, dstpath, md, NULL/*sysmd*/);
             if (dplret != DPL_SUCCESS && dplret != DPL_EEXIST)
             {
                 PRINTERR("[Migrating] Creating parent directory %s: %s\n",
-                         path, dpl_status_str(dplret));
+                         dstpath, dpl_status_str(dplret));
                 ret = EXIT_FAILURE;
                 goto err;
             }
@@ -160,8 +176,10 @@ err:
     if (sdir)
         synced_dir_unregister(sdir, is_responsible, created);
 
-    if (delim)
-        *delim = '/';
+    if (srcdelim)
+        *srcdelim = '/';
+    if (dstdelim)
+        *dstdelim = '/';
     if (md)
         dpl_dict_free(md);
 
@@ -178,7 +196,8 @@ create_directory(struct cldmig_info *tinfo,
     int                     pathlen = strlen(filestate->dst_path);
     char                    *delim = NULL;
     dpl_dict_t              *md = NULL;
-    char                    *parentdir = NULL;
+    char                    *srcparentdir = NULL;
+    char                    *dstparentdir = NULL;
     struct synceddir        *sdir = NULL;
     bool                    is_responsible = false;
     bool                    created = false;
@@ -188,15 +207,23 @@ create_directory(struct cldmig_info *tinfo,
 
     if (ctx->options.flags & AUTO_CREATE_DIRS)
     {
-        parentdir = strdup(filestate->dst_path);
-        if (parentdir == NULL)
+        srcparentdir = strdup(filestate->src_path);
+        if (srcparentdir == NULL)
         {
             PRINTERR("[Migrating] Could not strdup path for parent directory creation.\n");
             ret = EXIT_FAILURE;
             goto err;
         }
 
-        ret = create_parent_dirs(ctx, parentdir);
+        dstparentdir = strdup(filestate->dst_path);
+        if (dstparentdir == NULL)
+        {
+            PRINTERR("[Migrating] Could not strdup path for parent directory creation.\n");
+            ret = EXIT_FAILURE;
+            goto err;
+        }
+
+        ret = create_parent_dirs(ctx, srcparentdir, dstparentdir);
         if (ret != EXIT_SUCCESS)
         {
             PRINTERR("[Migrating] Could not create parent directories for %s\n",
@@ -269,8 +296,10 @@ err:
     if (sdir)
         synced_dir_unregister(sdir, is_responsible, created);
 
-    if (parentdir)
-        free(parentdir);
+    if (srcparentdir)
+        free(srcparentdir);
+    if (dstparentdir)
+        free(dstparentdir);
     if (delim)
         *delim = '/';
     if (md)
@@ -287,22 +316,31 @@ create_symlink(struct cldmig_info *tinfo,
     dpl_status_t            dplret;
     struct cloudmig_ctx     *ctx = tinfo->ctx;
     char                    *link_target = NULL;
-    char                    *parentdir = NULL;
+    char                    *srcparentdir = NULL;
+    char                    *dstparentdir = NULL;
 
     cloudmig_log(DEBUG_LVL, "[Migrating] Creating symlink %s\n",
                  filestate->obj_path);
 
     if (ctx->options.flags & AUTO_CREATE_DIRS)
     {
-        parentdir = strdup(filestate->dst_path);
-        if (parentdir == NULL)
+        srcparentdir = strdup(filestate->src_path);
+        if (srcparentdir == NULL)
         {
             PRINTERR("[Migrating] Could not strdup path for parent directory creation.\n");
             ret = EXIT_FAILURE;
             goto err;
         }
 
-        ret = create_parent_dirs(ctx, parentdir);
+        dstparentdir = strdup(filestate->dst_path);
+        if (dstparentdir == NULL)
+        {
+            PRINTERR("[Migrating] Could not strdup path for parent directory creation.\n");
+            ret = EXIT_FAILURE;
+            goto err;
+        }
+
+        ret = create_parent_dirs(ctx, srcparentdir, dstparentdir);
         if (ret != EXIT_SUCCESS)
         {
             PRINTERR("[Migrating] Could not create directory %s\n",
@@ -342,8 +380,10 @@ create_symlink(struct cldmig_info *tinfo,
 err:
     if (link_target)
         free(link_target);
-    if (parentdir)
-        free(parentdir);
+    if (srcparentdir)
+        free(srcparentdir);
+    if (dstparentdir)
+        free(dstparentdir);
 
     return ret;
 }
@@ -582,7 +622,8 @@ transfer_file(struct cldmig_info* tinfo,
               struct file_transfer_state* filestate)
 {
     int                     ret;
-    char                    *parentdir = NULL;
+    char                    *srcparentdir = NULL;
+    char                    *dstparentdir = NULL;
 
     cloudmig_log(INFO_LVL,
     "[Migrating] : file '%s' is a regular file : starting transfer...\n",
@@ -591,15 +632,23 @@ transfer_file(struct cldmig_info* tinfo,
 
     if (tinfo->config_flags & AUTO_CREATE_DIRS)
     {
-        parentdir = strdup(filestate->dst_path);
-        if (parentdir == NULL)
+        srcparentdir = strdup(filestate->src_path);
+        if (srcparentdir == NULL)
         {
             PRINTERR("[Migrating] Could not strdup path for parent directory creation.\n");
             ret = EXIT_FAILURE;
             goto err;
         }
 
-        if (create_parent_dirs(tinfo->ctx, parentdir) == EXIT_FAILURE)
+        dstparentdir = strdup(filestate->dst_path);
+        if (dstparentdir == NULL)
+        {
+            PRINTERR("[Migrating] Could not strdup path for parent directory creation.\n");
+            ret = EXIT_FAILURE;
+            goto err;
+        }
+
+        if (create_parent_dirs(tinfo->ctx, srcparentdir, dstparentdir) == EXIT_FAILURE)
         {
             PRINTERR("[Migrating] Could not create parent directories for file %s\n",
                      filestate->dst_path);
@@ -615,8 +664,10 @@ transfer_file(struct cldmig_info* tinfo,
                  filestate->obj_path, ret == EXIT_SUCCESS ? "succeeded" : "failed");
 
 err:
-    if (parentdir)
-        free(parentdir);
+    if (srcparentdir)
+        free(srcparentdir);
+    if (dstparentdir)
+        free(dstparentdir);
 
     return ret;
 }
