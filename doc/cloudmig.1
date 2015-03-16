@@ -56,7 +56,11 @@ cloudmig [ options ] \fIsource_profile_name\fP \fIdestination_profile_name\fP [ 
 .br
 [ \fB\-\-block-size\fP=\fIblock_size\fP | \fB\-B\fP \fIblock_size\fP]
 .br
+[ \fB\-\-location\-constraint\fP=\fBEU\fP|\fBus\-west\-1\fP|\fBap\-southeast\-1\fP | \fB\-l\fP \fBEU\fP|\fBus\-west\-1\fP|\fBap\-southeast\-1\fP ]
+.br
 [ \fB\-\-buckets\fP=\fIbuckets_associations\fP | \fB\-b\fP \fIbuckets_associations\fP ]
+.br
+[ \fB\-\-status\-bucket\fP=\fIbucket\fP | \fB\-L\fP \fIbucket\fP]
 .br
 [ \fB\-\-config\fP=\fIconfig_file\fP | \fB\-c\fP \fIconfig_file\fP ]
 .br
@@ -131,6 +135,35 @@ the settings of the command-line arguments. The source and destination profiles
 .RS
 Gives the path of the destination profile to the program instead of using the
 default droplet directory with a profile name.
+.RE
+
+\fB\-l\fP \fBconstraint_name\fP
+.br
+\fB\-\-location\-constraint\fP=\fBconstraint_name\fP
+.RS
+This option tells the migration tool which location constraint to use if it
+happens to create a bucket for either the status storage or for the destination
+storage. This is a S3-specific parameter, and accepts four possible values,
+including the default value, the US Standard location:
+.br
+    \fIEmpty String\fP: Standard US Location
+.br
+    \fBEU\fP: Standard EU location
+.br
+    \fBus\-west\-1\fP: US-West location
+.br
+    \fBap-southeast-1\fP: Asia-Pacific South-East location
+.RE
+
+\fB\-L\fP \fIbucket\fP
+.br
+\fB\-\-status\-bucket\fP=\fIbucket\fP
+.RS
+This options allows the user to explicitly set the name of the bucket or
+directory to be used to store the status, instead of a computed one. Be careful
+that this option may lead a slightly different configuration file to restart a
+migration, if the value for this option differs between two original
+configurations or set of command-line parameters.
 .RE
 
 \fB\-o\fP \fIlog_file\fP

@@ -310,7 +310,9 @@ void usage()
             "         [ --src-profile path | -s path ]\n"
             "         [ --dst-profile path | -d path ]\n"
             "         [ --status-profile path | -S path ]\n"
+            "         [ --location-constraint [ EU | us-west-1 | ap-southeast-1 ] | -l [ EU | us-west-1 | ap-southeast-1 ] ]\n"
             "         [ --buckets buckets_to_migrate | -b buckets_to_migrate ]\n"
+            "         [ --status-bucket status_bucket_name | -L status_bucket_name ]\n"
             "         [ --config configfile_path | -c configfile_path ]\n"
             "         [ --verbose debug|info|warn|status|error | -v debug|info|warn|status|error ]\n"
             "         [ --droplet-trace nihsrcdfb | -t nihsrcdfb ]\n"
@@ -346,7 +348,9 @@ static struct option    long_options[] = {
     {"src-profile",         required_argument,  0, 's'},
     {"dst-profile",         required_argument,  0, 'd'},
     {"status-profile",      required_argument,  0, 'S'},
+    {"location-constraint", required_argument,  0, 'l'},
     {"buckets",             required_argument,  0, 'b'},
+    {"status-bucket",       required_argument,  0, 'L'},
     {"config",              required_argument,  0, 'c'},
     /* Status-related options           */
 //      {"ignore-status",       no_argument,        0, 'i'},
@@ -373,7 +377,7 @@ int retrieve_opts(struct cloudmig_options *options, int argc, char* argv[])
     int                     option_index = 0;
 
     while ((cur_opt = getopt_long(argc, argv,
-                                  "-h?B:w:s:d:S:b:c:rv:t:o:",
+                                  "-h?B:w:s:d:S:l:b:L:c:rv:t:o:",
                                   long_options, &option_index)) != -1)
     {
         switch (cur_opt)
@@ -432,9 +436,20 @@ int retrieve_opts(struct cloudmig_options *options, int argc, char* argv[])
             if (opt_status_profile(options))
                 return EXIT_FAILURE;
             break ;
+        case 'l':
+            options->location_constraint = dpl_location_constraint(optarg);
+            if (options->location_constraint == (dpl_location_constraint_t)-1)
+            {
+                PRINTERR("Invalid value for location constraints");
+                return EXIT_FAILURE;
+            }
+            break ;
         case 'b':
             if (opt_buckets(options, optarg))
                 return EXIT_FAILURE;
+            break ;
+        case 'L':
+            options->status_bucket = optarg;
             break ;
         case 'B':
             options->block_size = strtoul(optarg, NULL, 10);

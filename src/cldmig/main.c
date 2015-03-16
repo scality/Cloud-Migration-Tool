@@ -173,7 +173,7 @@ int main(int argc, char* argv[])
     if (ctx.status == NULL)
         goto failure;
 
-    if (status_store_load(&ctx, src_hostname, dst_hostname) == EXIT_FAILURE)
+    if (status_store_load(&ctx, src_hostname, dst_hostname, ctx.options.status_bucket) == EXIT_FAILURE)
         goto failure;
 
     uint64_t done_objects = status_digest_get(ctx.status->digest, DIGEST_DONE_OBJECTS);

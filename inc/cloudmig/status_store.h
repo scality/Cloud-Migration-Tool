@@ -33,7 +33,7 @@ struct cloudmig_status* status_store_new();
 void                    status_store_free(struct cloudmig_status *status);
 void                    status_store_delete(struct cloudmig_ctx *ctx);
 
-int status_store_load(struct cloudmig_ctx* ctx, char *src_host, char *dst_host);
+int status_store_load(struct cloudmig_ctx* ctx, char *src_host, char *dst_host, char *name);
 
 void status_store_reset_iteration(struct cloudmig_ctx *ctx);
 

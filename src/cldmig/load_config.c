@@ -409,6 +409,38 @@ config_update_options(struct cldmig_config *conf,
             if (options->nb_threads > 1)
                 options->flags |= AUTO_CREATE_DIRS;
         }
+        else if (strcasecmp(key, "location-constraint") == 0)
+        {
+            if (!json_object_is_type(val, json_type_string))
+            {
+                PRINTERR("Invalid value type for option 'cloudmig/status-bucket': %i.\n",
+                         json_object_get_type(val));
+                return EXIT_FAILURE;
+            }
+            options->location_constraint = dpl_location_constraint((char*)json_object_get_string(val));
+            if (options->location_constraint == (dpl_location_constraint_t)-1)
+            {
+                PRINTERR("Invalid value for option 'cloudmig/location-constraint': %s.\n",
+                         val);
+                return EXIT_FAILURE;
+            }
+        }
+        else if (strcasecmp(key, "status-bucket") == 0)
+        {
+            if (!json_object_is_type(val, json_type_string))
+            {
+                PRINTERR("Invalid value type for option 'cloudmig/status-bucket': %i.\n",
+                         json_object_get_type(val));
+                return EXIT_FAILURE;
+            }
+
+            options->status_bucket = strdup(json_object_get_string(val));
+            if (options->status_bucket == NULL)
+            {
+                PRINTERR("Could not duplicate value for option 'cloudmig/status-bucket' value.\n");
+                return EXIT_FAILURE;
+            }
+        }
     }
     else
         PRINTERR("[Loading Config]: Invalid section name '%s'.\n", section);

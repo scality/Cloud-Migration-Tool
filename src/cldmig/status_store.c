@@ -118,7 +118,7 @@ status_store_create(struct cloudmig_ctx *ctx, char *storename)
 
     dplret = dpl_make_bucket(ctx->status_ctx,
                              storename,
-                             DPL_LOCATION_CONSTRAINT_UNDEF,
+                             ctx->options.location_constraint,
                              DPL_CANNED_ACL_PRIVATE);
     if (dplret != DPL_SUCCESS)
     {
@@ -459,7 +459,7 @@ err:
  * - General Status file
  * - Each Bucket Status file
  */
-int status_store_load(struct cloudmig_ctx* ctx, char *src_host, char *dst_host)
+int status_store_load(struct cloudmig_ctx* ctx, char *src_host, char *dst_host, char *name)
 {
     int             ret = EXIT_SUCCESS;
     int             regen_digest = 0;
@@ -468,7 +468,7 @@ int status_store_load(struct cloudmig_ctx* ctx, char *src_host, char *dst_host)
     cloudmig_log(INFO_LVL, "[Loading Status] Starting status loading...\n");
 
     // Ensure the status store exists
-    storename = status_store_name(src_host, dst_host);
+    storename = name ? strdup(name) : status_store_name(src_host, dst_host);
     if (storename == NULL)
     {
         ret = EXIT_FAILURE;

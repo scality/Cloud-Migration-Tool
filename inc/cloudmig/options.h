@@ -27,6 +27,8 @@
 #ifndef __SD_CLOUMIG_OPT_H__
 #define __SD_CLOUMIG_OPT_H__
 
+#include "droplet.h"
+
 enum cloudmig_flags
 {
     SRC_PROFILE_NAME    = 1 << 0,
@@ -41,34 +43,38 @@ enum cloudmig_flags
 
 struct cloudmig_options
 {
-    int                 flags;
-    int                 trace_flags;
-    long int            nb_threads;
-    const char          *src_profile;
-    const char          *dest_profile;
-    const char          *status_profile;
-    char                *logfile;
-    int                 n_buckets;
-    char                **src_buckets;
-    char                **dst_buckets;
-    char                *config;
-    long unsigned int   block_size;
+    int                         flags;
+    int                         trace_flags;
+    long int                    nb_threads;
+    const char                  *src_profile;
+    const char                  *dest_profile;
+    const char                  *status_profile;
+    char                        *logfile;
+    dpl_location_constraint_t   location_constraint;
+    char                        *status_bucket;
+    int                         n_buckets;
+    char                        **src_buckets;
+    char                        **dst_buckets;
+    char                        *config;
+    long unsigned int           block_size;
 };
 
-#define OPTIONS_INITIALIZER \
-{                           \
-    0,                      \
-    0,                      \
-    1,                      \
-    NULL,                   \
-    NULL,                   \
-    NULL,                   \
-    NULL,                   \
-    0,                      \
-    NULL,                   \
-    NULL,                   \
-    NULL,                   \
-    0                       \
+#define OPTIONS_INITIALIZER                 \
+{                                           \
+    0,                                      \
+    0,                                      \
+    1,                                      \
+    NULL,                                   \
+    NULL,                                   \
+    NULL,                                   \
+    NULL,                                   \
+    DPL_LOCATION_CONSTRAINT_US_STANDARD,    \
+    NULL,                                   \
+    0,                                      \
+    NULL,                                   \
+    NULL,                                   \
+    NULL,                                   \
+    0                                       \
 }
 
 // Used by config parser as well as command line arguments parser.
