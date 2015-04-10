@@ -35,9 +35,9 @@ ENDIF (WIN)
 ###############################################################################
 #   Define some projet-wide values...
 ###############################################################################
-SET(CLOUDMIG_VERSION_MAJOR 0)
-SET(CLOUDMIG_VERSION_MINOR 9)
-SET(CLOUDMIG_VERSION_PATCH 1)
+SET(CLOUDMIG_VERSION_MAJOR 1)
+SET(CLOUDMIG_VERSION_MINOR 0)
+SET(CLOUDMIG_VERSION_PATCH 0)
 
 SET(CPACK_PACKAGE_VERSION_MAJOR ${CLOUDMIG_VERSION_MAJOR})
 SET(CPACK_PACKAGE_VERSION_MINOR ${CLOUDMIG_VERSION_MINOR})
