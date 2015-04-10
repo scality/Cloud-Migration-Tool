@@ -910,7 +910,7 @@ status_bucket_create(dpl_ctx_t *status_ctx, dpl_ctx_t *src_ctx,
     if (iret != EXIT_SUCCESS)
         goto end;
 
-    iret = asprintf(&bcktdir, "%.*s", (int)(strlen(sbucket->path) - 5), sbucket->path);
+    iret = asprintf(&bcktdir, "%.*s", (int)(strlen(sbucket->path) - 4), sbucket->path);
     if (iret <= 0)
     {
         PRINTERR("[Creating Bucket Status] "

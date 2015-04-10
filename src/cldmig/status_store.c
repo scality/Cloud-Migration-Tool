@@ -82,9 +82,10 @@ status_store_path(struct cloudmig_status *status, char *storename)
     char* ret = NULL;
     char* path = NULL;
 
-    if (asprintf(&path, "%s%s/%s",
+    if (asprintf(&path, "%s%s%s%s",
                  status->path_is_bucket ? storename : "",
                  status->path_is_bucket ? ":" : "",
+                 status->path_is_bucket ? "" : "/",
                  status->path_is_bucket ? "" : storename) <= 0)
     {
         PRINTERR("Could not allocate Status Store path.\n");
