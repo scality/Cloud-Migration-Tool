@@ -49,6 +49,8 @@
 #define CLOUDMIG_STATUS_BUCKETENTRY_TYPE    "type"
 #define CLOUDMIG_STATUS_BUCKETENTRY_DONE    "done"
 
+#define CLOUDMIG_STATUS_BUCKET_FILEEXT      ".json"
+
 static void     _bucket_lock(struct bucket_status *bst);
 static void     _bucket_unlock(struct bucket_status *bst);
 
@@ -123,7 +125,7 @@ status_bucket_filename(const char *locator)
     if (filename == NULL)
         goto end;
     encoded = NULL;
-    strcpy(&filename[len], ".json");
+    strcpy(&filename[len], CLOUDMIG_STATUS_BUCKET_FILEEXT);
 
     PRINTERR("Encoded name(%s)=%s.\n",
              locator && locator[0] == 0 ? locator+1 : locator,
@@ -910,7 +912,10 @@ status_bucket_create(dpl_ctx_t *status_ctx, dpl_ctx_t *src_ctx,
     if (iret != EXIT_SUCCESS)
         goto end;
 
-    iret = asprintf(&bcktdir, "%.*s", (int)(strlen(sbucket->path) - 4), sbucket->path);
+    iret = asprintf(&bcktdir, "%.*s",
+                    (int)(strlen(sbucket->path)
+                          - strlen(CLOUDMIG_STATUS_BUCKET_FILEEXT)),
+                    sbucket->path);
     if (iret <= 0)
     {
         PRINTERR("[Creating Bucket Status] "
@@ -1441,8 +1446,11 @@ status_bucket_next_ex(dpl_ctx_t *status_ctx,
             }
 
             // Compute state path
-            if (asprintf(&filestate->status_path, "%.*s/%i.json",
-                         (int)(strlen(bst->path) - 5), bst->path, cur_entry) == -1)
+            if (asprintf(&filestate->status_path, "%.*s/%i%s",
+                         (int)(strlen(bst->path)
+                               - strlen(CLOUDMIG_STATUS_BUCKET_FILEEXT)),
+                         bst->path, cur_entry,
+                         CLOUDMIG_STATUS_BUCKET_FILEEXT) == -1)
             {
                 PRINTERR("[Bucket Status Next Entry] "
                          "Could not compute intermediary status file path: %s.\n",
