@@ -280,6 +280,7 @@ _bucket_set_paths(struct bucket_status *bckt, char *storepath, char *srcname, ch
     struct json_object      *jsobj = NULL;
     struct json_object      *jssrc = NULL;
     struct json_object      *jsdst = NULL;
+    struct json_object      *jsobjs = NULL;
     char                    *fpath = NULL;
 
     fpath = _bucket_filepath(storepath, srcname);
@@ -305,6 +306,15 @@ _bucket_set_paths(struct bucket_status *bckt, char *storepath, char *srcname, ch
     {
         PRINTERR("[Setting Bucket Status Path] "
                  "Could not allocate JSON string object.\n");
+        ret = EXIT_FAILURE;
+        goto end;
+    }
+
+    jsobjs = json_object_new_array();
+    if (jsobjs == NULL)
+    {
+        PRINTERR("[Setting Bucket Status Path] "
+                 "Could not allocate JSON array object.\n");
         ret = EXIT_FAILURE;
         goto end;
     }
@@ -344,6 +354,12 @@ _bucket_set_paths(struct bucket_status *bckt, char *storepath, char *srcname, ch
 
     if (bckt->json == NULL)
     {
+        json_object_object_add(jsobj, CLOUDMIG_STATUS_BUCKET_OBJECTS, jsobjs);
+        jsobjs = NULL;
+    }
+
+    if (bckt->json == NULL)
+    {
         bckt->json = jsobj;
         jsobj = NULL;
     }
@@ -365,6 +381,8 @@ end:
         json_object_put(jssrc);
     if (jsdst)
         json_object_put(jsdst);
+    if (jsobjs)
+        json_object_put(jsobjs);
     if (jsobj)
         json_object_put(jsobj);
 
