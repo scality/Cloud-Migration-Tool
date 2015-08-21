@@ -192,13 +192,13 @@ migrate(struct cloudmig_ctx* ctx)
         if (ret != 0)
             cloudmig_log(WARN_LVL, "Could not join thread %i: %s.\n", i, strerror(errno));
         else
-            ret += errcount;
+            nb_failures += errcount;
     }
 
     // In any case, attempt to update the status digest before doing anything else
     (void)status_digest_upload(ctx->status->digest);
 
-    // Check if it was the end of the transfer by checking ret against 0
+    // Check if it was the end of the transfer by checking the number of failures
     if (nb_failures == 0) // 0 == number of failures that occured.
     {
         cloudmig_log(INFO_LVL, "Migration finished with success !\n");
