@@ -527,11 +527,6 @@ int status_store_load(struct cloudmig_ctx* ctx, char *src_host, char *dst_host, 
     ret = EXIT_SUCCESS;
 
 end:
-    if (ctx->status->store_path != NULL)
-    {
-        free(ctx->status->store_path);
-        ctx->status->store_path = NULL;
-    }
     if (storename)
         free(storename);
 

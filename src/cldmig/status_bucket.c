@@ -1469,6 +1469,9 @@ status_bucket_next_ex(dpl_ctx_t *status_ctx,
             filestate->fixed.offset = 0;
             filestate->state_idx = cur_entry;
 
+            filestate->rstatus = NULL;
+            filestate->wstatus = NULL;
+
             // Load intermediary status if flag set
             // (Adds additional info if upload was interrupted)
             if (do_load)

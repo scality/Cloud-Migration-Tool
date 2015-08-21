@@ -56,8 +56,10 @@ void delete_source(struct cloudmig_ctx *ctx)
             goto cleanup;
         }
         if (found == 1)
+        {
             delete_file(ctx->src_ctx, "Source", filestate.obj_path);
-        status_store_release_entry(&filestate);
+            status_store_release_entry(&filestate);
+        }
     }
 
     status_store_delete(ctx);
