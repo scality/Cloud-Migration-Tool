@@ -118,7 +118,6 @@ status_bucket_filename(const char *locator)
     encoded = status_bucket_encodedname(locator);
     if (encoded == NULL)
         goto end;
-    PRINTERR("name encoded as %s\n", encoded);
 
     len = strlen(encoded);
     filename = realloc(encoded, len + 6);
@@ -126,10 +125,6 @@ status_bucket_filename(const char *locator)
         goto end;
     encoded = NULL;
     strcpy(&filename[len], CLOUDMIG_STATUS_BUCKET_FILEEXT);
-
-    PRINTERR("Encoded name(%s)=%s.\n",
-             locator && locator[0] == 0 ? locator+1 : locator,
-             filename);
 
     ret = filename;
     filename = NULL;
@@ -176,20 +171,29 @@ end:
 }
 
 int
-status_bucket_namecmp(const char *encoded, const char *raw)
+status_bucket_namecmp(const char *encoded, const char *raw, bool *errorp)
 {
     char    *encraw = NULL;
-    int     ret;
+    int     ret = 0;
+    bool    err = false;
 
     encraw = status_bucket_filename(raw);
     if (encraw == NULL)
+    {
+        PRINTERR("[Loading Status Store] "
+                 "Could not compare bucket names: Could not encode raw "
+                 "bucket name (Memory issue?)");
+        err = true;
         goto end;
+    }
 
     ret = strcmp(encoded, encraw);
 
 end:
     if (encraw)
         free(encraw);
+
+    *errorp = err;
 
     return ret;
 }

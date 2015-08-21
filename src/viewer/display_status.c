@@ -170,13 +170,13 @@ print_line(int thread_id, char *fname,
     if (fname == NULL || btotal == 0)
     {
 
-        asprintf(&tmp_str, "Thread[%i] : done...", thread_id);
+        ret = asprintf(&tmp_str, "Thread[%i] : done...", thread_id);
         if (ret < 0)
         {
             ret = EXIT_FAILURE;
             goto end;
         }
-        asprintf(&msg, "%-*s", COLS, tmp_str);
+        ret = asprintf(&msg, "%-*s", COLS, tmp_str);
         if (ret < 0)
         {
             ret = EXIT_FAILURE;

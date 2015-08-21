@@ -319,12 +319,13 @@ end:
 static int
 status_store_do_load_update(struct cloudmig_ctx *ctx, int regen_digest)
 {
-    int             ret;
+    int             ret = EXIT_FAILURE;
     int             config_found[ctx->options.n_buckets];
     void            *dir_hdl = NULL;
     dpl_dirent_t    dirent;
     dpl_status_t    dplret;
     uint64_t        addcount, addsize;
+    bool            cmperror = 0;
 
     cloudmig_log(INFO_LVL, "[Loading Status Store] "
                  "Loading and updating store...\n");
@@ -360,7 +361,9 @@ status_store_do_load_update(struct cloudmig_ctx *ctx, int regen_digest)
                          "Browsing options: entry=%s\n", ctx->options.src_buckets[config_index]);
             if (dirent.type == DPL_FTYPE_REG
                 && status_bucket_namecmp(dirent.name,
-                                         ctx->options.src_buckets[config_index]) == 0)
+                                         ctx->options.src_buckets[config_index],
+                                         &cmperror) == 0
+                && cmperror == false)
             {
                 cloudmig_log(DEBUG_LVL, "[Loading Status Store] "
                              "Found bucket status (bucket=%s) on storage\n",
@@ -368,6 +371,8 @@ status_store_do_load_update(struct cloudmig_ctx *ctx, int regen_digest)
                 config_found[config_index] = 1;
                 break ;
             }
+            if (cmperror)
+                goto err;
         }
 
         /*

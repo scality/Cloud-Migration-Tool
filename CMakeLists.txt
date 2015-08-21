@@ -73,6 +73,12 @@ SET(CPACK_PACKAGE_DESCRIPTION_SUMMARY "cloudmig is a tool for migrating data bet
 # set the maintener's contact information.
 SET(CPACK_PACKAGE_CONTACT "David Pineau <dav.pineau@gmail.com>")
 
+###############################################################################
+#   Ensure we got a proper default configuration
+###############################################################################
+IF (NOT CMAKE_BUILD_TYPE)
+    SET (CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build, options are: Release, RelWithDebInfo, Debug.")
+ENDIF ()
 
 ###############################################################################
 #   Add a bit of verbose for the cmake build
@@ -95,6 +101,32 @@ FIND_PACKAGE(Droplet REQUIRED)
 FIND_PACKAGE(LibXml2 REQUIRED)
 FIND_PACKAGE(Curses)            #libcurses / libncurses for the viewer tool
 FIND_PACKAGE(Menu)              #libmenu, for the viewer tool
+
+SET(CMAKE_THREAD_PREFER_PTHREAD True)
+FIND_PACKAGE(Threads REQUIRED)
+IF (NOT CMAKE_USE_PTHREADS_INIT)
+    MESSAGE(ERROR "Found Threads library but not PThreads. Compatibility is untested. Aborting.")
+ENDIF ()
+#
+# Add custom targets to switch build types
+#
+ADD_CUSTOM_TARGET(debug
+                  COMMAND ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE=Debug ${CMAKE_SOURCE_DIR}
+                  COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target all
+                  COMMENT "Switch CMAKE_BUILD_TYPE to Debug"
+)
+
+ADD_CUSTOM_TARGET(relwithdebinfo
+                  COMMAND ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE=RelWithDebinfo ${CMAKE_SOURCE_DIR}
+                  COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target all
+                  COMMENT "Switch CMAKE_BUILD_TYPE to Release With Debug Infos (RelWithDebinfo)"
+)
+
+ADD_CUSTOM_TARGET(release
+                  COMMAND ${CMAKE_COMMAND} -DCMAKE_BUILD_TYPE=Release ${CMAKE_SOURCE_DIR}
+                  COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target all
+                  COMMENT "Switch CMAKE_BUILD_TYPE to Release"
+)
 
 
 #

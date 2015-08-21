@@ -46,24 +46,52 @@ get_transfer_description(char **desc, char *path)
 {
     int ret = EXIT_FAILURE;
     int len = strlen(path);
-    strcat(path, "/description.txt");
     struct stat st;
+    int cc = 0;
+    char *buffer = NULL;
+    int fd = -1;
+
+    strcat(path, "/description.txt");
+
     if (stat(path, &st) == -1)
         goto err;
 
-    int fd = open(path, O_RDONLY);
+    fd = open(path, O_RDONLY);
     if (fd == -1)
         goto err;
 
-    *desc = calloc(st.st_size+1, sizeof(*desc));
-    if (*desc == NULL)
+    buffer = calloc(st.st_size+1, sizeof(*buffer));
+    if (buffer == NULL)
         return ENOMEM; // Mark the fact that it is a memory matter.
-    read(fd, *desc, st.st_size);
+    do
+    {
+        ret = read(fd, buffer+cc, st.st_size-cc);
+        if (ret < 0)
+        {
+            if (errno == EAGAIN)
+                continue ;
+            goto err;
+        }
+        cc += ret;
+    } while (cc < st.st_size && ret > 0);
+
+    if (cc < st.st_size)
+    {
+        ret = EXIT_FAILURE;
+        goto err;
+    }
+
+    *desc = buffer;
+    buffer = NULL;
 
     ret = EXIT_SUCCESS;
 
 err:
     path[len] = '\0';
+
+    if (buffer)
+        free(buffer);
+
     if (fd != -1)
         close(fd);
 

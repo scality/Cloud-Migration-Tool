@@ -32,7 +32,7 @@ struct cloudmig_status;
 struct bucket_status;
 struct file_transfer_state;
 
-int                     status_bucket_namecmp(const char *ref, const char *optstring);
+int                     status_bucket_namecmp(const char *ref, const char *optstring, bool *errorp);
 
 struct bucket_status*   status_bucket_new();
 void                    status_bucket_free(struct bucket_status *bst);

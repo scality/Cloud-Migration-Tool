@@ -80,6 +80,7 @@ add_msg(struct message **msgs, char *format, ...)
     va_list         ap;
     struct message  *msg = NULL;
     struct message  *tmp = NULL;
+    int             ret = 0;
 
     msg = calloc(1, sizeof(*msg));
     if (msg == NULL)
@@ -104,8 +105,12 @@ add_msg(struct message **msgs, char *format, ...)
 
     va_start(ap, format);
     msg->type = TEST;
-    vasprintf(&msg->msg, format, ap);
+    ret = vasprintf(&msg->msg, format, ap);
     va_end(ap);
+
+    // It's only the viewer, so we can afford losing messages due to internal errors.
+    if (ret < 0)
+        goto end;
 
     if (*msgs)
     {
@@ -116,6 +121,15 @@ add_msg(struct message **msgs, char *format, ...)
     }
     else
         *msgs = msg;
+    msg = NULL;
+
+end:
+    if (msg)
+    {
+        if (msg->msg)
+            free(msg->msg);
+        free(msg);
+    }
 }
 
 static int
@@ -296,7 +310,7 @@ view_instance(const char *path)
     strcat(lockpath, "/display.lock");
 
     // Create  a lock file to get control over socket...
-    lockfd = open(lockpath, O_CREAT|O_EXCL);
+    lockfd = open(lockpath, O_CREAT|O_EXCL, 0600);
     if (lockfd == -1)
         goto failure;
 
